@@ -97,8 +97,7 @@
 using namespace std ;
 
 // ETSI PET scanner model (cylindricalPET)
-#define N_STAT_RINGS            40 // ETSIPETscanner: Number of physical rings
-#define N_SEG                   79 // ETSIPETscanner: Number of segments (2 N_RINGS - 1)
+#define N_RINGS                 40 // ETSIPETscanner: Number of physical rings
 #define N_DET                  600 // ETSIPETscanner: Detectors per ring
 #define S_WIDTH                380 // ETSIPETscanner: Number of radial sinogram bins ### CHECK ###
 #define N_RSEC                  60 // ETSIPETscanner: Number of resector
@@ -114,37 +113,22 @@ using namespace std ;
 #define N_CRY_xy                 5 // ETSIPETscanner: Number of tangential crystals
 #define N_CRY_z                  5 // ETSIPETscanner: Number of axial crystals
 #define MAX_D_RING              39 // ETSIPETscanner: Maximum ring difference
-#define SPAN                     1 // ETSIPETscanner: Span factor or axial compression factor (can only be an odd number)
-#define N_PLANES              1600 // ETSIPETscanner: Total number of sinograms
-#define FOV                    128 // ETSIPETscanner: Width of the FOV (mm)
-#define SLICES_PER_FOV          79 // ETSIPETscanner: Number of slices per FOV
-#define USE_OFFSET               0 // ETSIPETscanner: On/Off use of offset
-#define OFFSET                 139 // ETSIPETscanner: Sets initial sinogram angle
-#define N_ROOTFILES             36 // Number of ROOT files to process. Set it to 0 if you wish to skip ROOT binning (e.g. to bin only normalization data)
-#define N_CBM_STEPS              1 // Number of CBM steps including the initial position (1 for static, 10 for VisionSparse/VisionCheckerboard every-other-mini-block, 20 $
-#define CBM_DIRECTION_sign      -1 // Set it to -1 if CBM (i.e. object) motion is to the left or lower ring indices (then shift rings to the right i.e. higher ring indice$
-                                   // Otherwise set it to 1, for CBM (object) motion to the right i.e. to higher ring indices, (then shift rings to the left, i.e. lower r$
-
-#define BIN_TO_MICH             0 // Bin prompts to a Michelogram 4-Dimensional array [ring2][ring1][phi][u] NOTE: NOT PREFERRED IF MAX_D_RING<N_RINGS -1 AS THEN ITS SIZ$
-#define BIN_TO_PROJ             0 // Bin prompts to Projectiongram (Viewgram) format and segment order: -MAX.RING.DIFF, ...,-2,-1,0,+1,+2, ..., +MAX.RING.DIFF
-#define BIN_TO_SINO             0 // Bin prompts to Sinogram format in the following segment order: 0,+1,-1,+2,-2, ..., +MAX.RING.DIFF, -MAX.RING.DIFF
-
+#define NUMBER_OF_TOF_BINS      62 // ETSIPETscanner: Number of TOF bins
+#define NUMBER_OF_ENERGY_BINS   1
+#define RADIUS                  313.f // Includes DOI
 #define TxVirtualCrystalNUM      0 // ETSIPETscanner: Set the number of virtual crystals that you wish to interleave transaxially in the gaps between TxPhysCrystalNUM physical crystals
 #define AxVirtualCrystalNUM      0 // ETSIPETscanner: Set the number of virtual crystals that you wish to interleave axially in the gaps between AxPhysCrystalNUM physical crystal rings
 #define TxPhysCrystalNUM        10 // ETSIPETscanner: Number of physical crystals every which you wish to add TxVirtualCrystalNUM virtual crystals transaxially
 #define AxPhysCrystalNUM         5 // ETSIPETscanner: Number of physical crystal rings every which you wish to add  AxVirtualCrystalNUM virtual crystal rings
 
-#define CALC_SENS                0 // ETSIPETscanner: Set this flag to 1 only if you wish to calculate and save the axial sensitivity profile
-
-
 void usage()
 {
-  std::cout << "Usage: bin_gate [options]" << std::endl;
-  std::cout << "Options:" << std::endl;
-  std::cout << "  -r, --root-prefix <prefix>  Prefix for root files" << std::endl;
-  std::cout << "  -p, --petsird-file <file>   PETSiRD file" << std::endl;
-  std::cout << "  -s, --sino-file <file>      Sinogram file" << std::endl;
-  std::cout << "  -l, --legacy <yes/no>       Legacy option" << std::endl;
+  std::cout << "Usage: ./root_to_petsird -r <root_prefix> -p <petsird_file> [-n <number_of_root_files>] [-v]" << std::endl;
+  std::cout << "  -r, --root-prefix <root_prefix>            Prefix of the root files" << std::endl;
+  std::cout << "  -p, --petsird-file <petsird_file>          Output PETSiRD file" << std::endl;
+  std::cout << "  -n, --number-of-root-files <number>        Number of root files to process (default: 2)" << std::endl;
+  std::cout << "  -v, --verbose                              Verbose output" << std::endl;
+  std::cout << "  -h, --help                                 Print this help" << std::endl;
 }
 
 int calculate_detector_id(int gantry_id, int rsector_id, int module_id, int submodule_id, int crystal_id, int rmin = 0)
@@ -165,11 +149,8 @@ int calculate_detector_id(int gantry_id, int rsector_id, int module_id, int subm
 
 // single ring as example
 prd::ScannerInformation
-get_scanner_info(float radius, int n_detectors, int n_rings)
+get_scanner_info(float radius, int n_detectors, int n_rings, float detector_z_dim = 3.2f)
 {
-  const int NUMBER_OF_TOF_BINS = 25;
-  const int NUMBER_OF_ENERGY_BINS = 1;
-
   std::vector<float> angles;
   for (int i = 0; i < n_detectors; ++i)
   {
@@ -186,8 +167,8 @@ get_scanner_info(float radius, int n_detectors, int n_rings)
       prd::Detector d;
       d.x = radius * std::sin(angle);
       d.y = radius * std::cos(angle);
-      d.z = 0.0+r; // TODO: calculate this
-      d.id = detector_id++; // TODO: Make consistent with detector ID calculation above
+      d.z = ((-n_rings/2.0f)*detector_z_dim) +detector_z_dim*r;
+      d.id = detector_id++;
       detectors.push_back(d);
     }
   }
@@ -196,12 +177,14 @@ get_scanner_info(float radius, int n_detectors, int n_rings)
   // TOF info (in mm)
   FArray1D::shape_type tof_bin_edges_shape = { NUMBER_OF_TOF_BINS + 1 };
   FArray1D tof_bin_edges(tof_bin_edges_shape);
-  for (std::size_t i = 0; i < tof_bin_edges.size(); ++i)
+  for (std::size_t i = 0; i < tof_bin_edges.size(); ++i) {
     tof_bin_edges[i] = (i - NUMBER_OF_TOF_BINS / 2.F) / NUMBER_OF_TOF_BINS * 2 * radius;
+  }
   FArray1D::shape_type energy_bin_edges_shape = { NUMBER_OF_ENERGY_BINS + 1 };
   FArray1D energy_bin_edges(energy_bin_edges_shape);
-  for (std::size_t i = 0; i < energy_bin_edges.size(); ++i)
+  for (std::size_t i = 0; i < energy_bin_edges.size(); ++i) {
     energy_bin_edges[i] = 430.F + i * (650.F - 430.F) / NUMBER_OF_ENERGY_BINS;
+  }
   prd::ScannerInformation scanner_info;
   scanner_info.detectors = detectors;
   scanner_info.tof_bin_edges = tof_bin_edges;
@@ -244,9 +227,8 @@ int main(int argc, char** argv)
 
   std::string root_prefix  = std::string{};
   std::string petsird_file = std::string{};
-  std::string sino_file = std::string{};
-  std::string legacy_option = std::string("no");
   int number_of_root_files = 2;
+  bool verbose = false;
 
   // Parse command line args:
   for (int i = 1; i < argc; ++i) {
@@ -255,12 +237,10 @@ int main(int argc, char** argv)
       root_prefix = argv[++i];
     } else if (arg == "-p" || arg == "--petsird-file") {
       petsird_file = argv[++i];
-    } else if (arg == "-s" || arg == "--sino-file") {
-      sino_file = argv[++i];
-    } else if (arg == "-l" || arg == "--legacy") {
-      legacy_option = argv[++i];
     } else if (arg == "-n" || arg == "--number-of-root-files") {
       number_of_root_files = atoi(argv[++i]);
+    } else if (arg == "-v" || arg == "--verbose") {
+      verbose = true;
     } else if (arg == "-h" || arg == "--help") {
       usage();
       return 0;
@@ -285,23 +265,7 @@ int main(int argc, char** argv)
   // Print arguments and exit
   std::cout << "root_prefix: " << root_prefix << std::endl;
   std::cout << "petsird_file: " << petsird_file << std::endl;
-  if (!sino_file.empty()) {
-    std::cout << "sino_file: " << sino_file << std::endl;
-  }
-
-  Int_t N_RINGS = N_STAT_RINGS + N_CBM_STEPS - 1; //Calculation of total number of rings in the system matrix (accounting for added rings due to CBM)
-
-  string filedir, inputfilename ;
-  string prompts_filename, norm_outputfilename;
-
-
-  // This is an input user parameter to allow exclusion of odd ring counts from binning.
-  string remODD;
-  remODD = legacy_option;
-
-  //#####################################################################
-  //#              Loop over the .root file in the directory "PATH"     #
-  //#####################################################################
+  string filedir, inputfilename;
   Int_t   Trues = 0, Scatters = 0, Randoms = 0;
 
   //####################################################################
@@ -387,7 +351,17 @@ int main(int argc, char** argv)
 
   // Output PETSIRD
   prd::Header header;
-  prd::ScannerInformation scanner = get_scanner_info(300.0f, N_DET, N_RINGS);
+  prd::ScannerInformation scanner = get_scanner_info(RADIUS, N_DET, N_RINGS);
+
+  if (verbose) {
+    // Print scanner information
+    std::cout << "Scanner information:" << std::endl;
+    std::cout << "  Number of detectors: " << scanner.NumberOfDetectors() << std::endl;
+    for (auto d : scanner.detectors) {
+      std::cout << "    Detector " << d.id << ": (" << d.x << ", " << d.y << ", " << d.z << ")" << std::endl;
+    }
+  }
+
   prd::ExamInformation exam;
 
   header.exam = exam;
@@ -417,15 +391,17 @@ int main(int argc, char** argv)
         event.energy_1_idx = static_cast<uint32_t>(energyToIdx(1.0e3*energy1, scanner));
         event.energy_2_idx = static_cast<uint32_t>(energyToIdx(1.0e3*energy2, scanner));
 
-        if (false && i%100000 == 0) {
+        if (verbose && i%100000 == 0) {
           std::cout << "Event " << i << std::endl;
           std::cout << "  detector_1_id: " << event.detector_1_id << std::endl;
           std::cout << "  detector_2_id: " << event.detector_2_id << std::endl;
           std::cout << "  tof_idx: " << event.tof_idx << std::endl;
           std::cout << "  energy_1_idx: " << event.energy_1_idx << std::endl;
           std::cout << "  energy_2_idx: " << event.energy_2_idx << std::endl;
-          std::cout << "  energy_1: " << energy1 << std::endl;
-          std::cout << "  energy_2: " << energy2 << std::endl;
+          std::cout << "  detector 1 position: " << scanner.detectors[event.detector_1_id].x << ", " << scanner.detectors[event.detector_1_id].y << ", " << scanner.detectors[event.detector_1_id].z << std::endl;
+          std::cout << "  detector 2 position: " << scanner.detectors[event.detector_2_id].x << ", " << scanner.detectors[event.detector_2_id].y << ", " << scanner.detectors[event.detector_2_id].z << std::endl;
+          std::cout << "  GlobalPosition 1: " << globalPosX1 << ", " << globalPosY1 << ", " << globalPosZ1 << std::endl;
+          std::cout << "  GlobalPosition 2: " << globalPosX2 << ", " << globalPosY2 << ", " << globalPosZ2 << std::endl;
         }
 
         long this_time_block = static_cast<long>(time1*1.0e3 / scanner.listmode_time_block_duration);
@@ -449,9 +425,6 @@ int main(int argc, char** argv)
     }
   }
   writer.WriteTimeBlocks(time_block);
-
   printf("Total Number of Coincidence Events in the ROOT file:= %llu ...\n",nentries );
-  printf("Total Number of Coincidence Events registered in list-mode or sinogram format:= %lu ...\n", Counts_binned);
-
-  return(0);
+  printf("Total Number of Coincidence Events registered in list-mode or sinogram format:= %lu ...\n", Counts_binned);  return(0);
 }
