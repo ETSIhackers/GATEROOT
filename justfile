@@ -1,5 +1,7 @@
 set shell := ['bash', '-ceuo', 'pipefail']
 
+default: build
+
 @download-test-data:
     data/download-data.sh
 
