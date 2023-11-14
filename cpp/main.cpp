@@ -123,7 +123,7 @@ using namespace std ;
 
 #define BIN_TO_MICH             0 // Bin prompts to a Michelogram 4-Dimensional array [ring2][ring1][phi][u] NOTE: NOT PREFERRED IF MAX_D_RING<N_RINGS -1 AS THEN ITS SIZ$
 #define BIN_TO_PROJ             0 // Bin prompts to Projectiongram (Viewgram) format and segment order: -MAX.RING.DIFF, ...,-2,-1,0,+1,+2, ..., +MAX.RING.DIFF
-#define BIN_TO_SINO             1 // Bin prompts to Sinogram format in the following segment order: 0,+1,-1,+2,-2, ..., +MAX.RING.DIFF, -MAX.RING.DIFF
+#define BIN_TO_SINO             0 // Bin prompts to Sinogram format in the following segment order: 0,+1,-1,+2,-2, ..., +MAX.RING.DIFF, -MAX.RING.DIFF
 
 #define TxVirtualCrystalNUM      0 // ETSIPETscanner: Set the number of virtual crystals that you wish to interleave transaxially in the gaps between TxPhysCrystalNUM physical crystals
 #define AxVirtualCrystalNUM      0 // ETSIPETscanner: Set the number of virtual crystals that you wish to interleave axially in the gaps between AxPhysCrystalNUM physical crystal rings
@@ -143,17 +143,63 @@ unsigned short ans_SC, ans_RC, ans_SRC, ans_S, ans_R;
 */
 //Float_t    Mich_r1r2fu[N_RINGS][N_RINGS][N_DET/2][S_WIDTH]={0};
 
+void usage()
+{
+  std::cout << "Usage: bin_gate [options]" << std::endl;
+  std::cout << "Options:" << std::endl;
+  std::cout << "  -r, --root-prefix <prefix>  Prefix for root files" << std::endl;
+  std::cout << "  -p, --petsird-file <file>   PETSiRD file" << std::endl;
+  std::cout << "  -s, --sino-file <file>      Sinogram file" << std::endl;
+  std::cout << "  -l, --legacy <yes/no>       Legacy option" << std::endl;
+}
+
 int main(int argc, char** argv)
 {
-  //---------------------------------------------------------------------------------
-  // the first  argument (argv[1]) is the sub-directory of the input file
-  // the second argument (argv[2]) is the name of the output file
-  //
-  //---------------------------------------------------------------------------------
-  if(argc<3) {
-    std::cout<<" Right number of input argument please !! "<<std::endl ;
+
+  std::string root_prefix  = std::string{};
+  std::string petsird_file = std::string{};
+  std::string sino_file = std::string{};
+  std::string legacy_option = std::string("no");
+
+  // Parse command line args:
+  for (int i = 1; i < argc; ++i) {
+    std::string arg = argv[i];
+    if (arg == "-r" || arg == "--root-prefix") {
+      root_prefix = argv[++i];
+    } else if (arg == "-p" || arg == "--petsird-file") {
+      petsird_file = argv[++i];
+    } else if (arg == "-s" || arg == "--sino-file") {
+      sino_file = argv[++i];
+    } else if (arg == "-l" || arg == "--legacy") {
+      legacy_option = argv[++i];
+    } else if (arg == "-h" || arg == "--help") {
+      usage();
+      return 0;
+    } else {
+      std::cerr << "Unknown argument: " << arg << std::endl;
+      return 1;
+    }
+  }
+
+  if (root_prefix.empty()) {
+    std::cerr << "Missing root prefix" << std::endl;
+    usage();
     return 1;
   }
+
+  if (petsird_file.empty()) {
+    std::cerr << "Missing petsird file" << std::endl;
+    usage();
+    return 1;
+  }
+
+  // Print arguments and exit
+  std::cout << "root_prefix: " << root_prefix << std::endl;
+  std::cout << "petsird_file: " << petsird_file << std::endl;
+  if (!sino_file.empty()) {
+    std::cout << "sino_file: " << sino_file << std::endl;
+  }
+
   time_t initialTime = time(NULL);
   time_t finalTime, totalTime;
 
@@ -184,7 +230,7 @@ int main(int argc, char** argv)
   string prompts_filename, norm_outputfilename, Moutputfilename, Poutputfilename, Soutputfilename;
 
   FILE  *Mich_r1r2fuFile, *Proj_File, *Sino_File;
-  prompts_filename = argv[2];
+  prompts_filename = sino_file;
 
   if (BIN_TO_MICH)
     {
@@ -200,7 +246,7 @@ int main(int argc, char** argv)
       Proj_File = fopen(Poutputfilename.c_str(),"wb");
     }
 
-  if (BIN_TO_SINO)
+  if (!sino_file.empty())
     {
       Soutputfilename = "Sino_"+ prompts_filename + ".s" ;
       cout << "Sinogram file name is = " << Soutputfilename << endl ;
@@ -209,7 +255,7 @@ int main(int argc, char** argv)
 
   // This is an input user parameter to allow exclusion of odd ring counts from binning.
   string remODD;
-  remODD = argv[3];
+  remODD = legacy_option;
 
   int RMIN, RMIN_CBM;
   int RMAX, RMAX_CBM;
@@ -288,7 +334,7 @@ int main(int argc, char** argv)
   //#                        Set branch addresses - TTree Coincidences                   #
   //######################################################################################
 
-  filedir = argv[1];
+  filedir = root_prefix;
   TChain *Coincidences = new TChain("Coincidences");
 
   ostringstream fileNumber[N_ROOTFILES];
@@ -645,7 +691,7 @@ int main(int argc, char** argv)
       fclose(Proj_File);
     } //END IF
 
-  if (BIN_TO_SINO)
+  if (!sino_file.empty())
     {
       printf("Writing Sinogram to Disk...\n");
       Int_t S_NUM;
