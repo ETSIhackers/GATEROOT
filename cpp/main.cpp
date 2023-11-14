@@ -91,6 +91,8 @@
 
 // PETSIRD Includes
 #include "protocols.h"
+#include "types.h"
+#include "binary/protocols.h"
 
 using namespace std ;
 
@@ -724,6 +726,34 @@ finalTime = time(NULL);
 totalTime = -initialTime + finalTime;
 cout<<"total calculation time in seconds = "<< totalTime <<" sec"<<endl;
 cout<<"total calculation time in minutes = "<< totalTime/60 <<" min"<<endl;
+
+  // Output PETSIRD
+  prd::Header header;
+  prd::ScannerInformation scanner;
+  prd::ExamInformation exam;
+
+  // Detectors
+  // TODO: Fill in crystal positions correctly
+  for (size_t det = 0; det < N_DET*N_STAT_RINGS; det++)
+  {
+    prd::Detector detector;
+    detector.id = det;
+    detector.x = 0;
+    detector.y = 0;
+    detector.z = 0;
+    scanner.detectors.push_back(detector);
+  }
+  yardl::NDArray<float, 1> tofBinEdges{-30.0,30.0};
+  yardl::NDArray<float, 1> energyBinEdges{450.0,650.0};
+
+  scanner.tof_bin_edges = tofBinEdges;
+  scanner.energy_bin_edges = energyBinEdges;
+  header.exam = exam;
+  header.scanner = scanner;
+
+  // Write PETSiRD file
+  prd::binary::PrdExperimentWriter writer(petsird_file);
+  writer.WriteHeader(header);
 
   return(0);
 }
