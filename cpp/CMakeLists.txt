@@ -3,6 +3,13 @@ project(PETSIRDUseCaseTemplate VERSION 0.1.0)
 
 set(CMAKE_CXX_STANDARD 17)
 
+#Set the build type to Release if not specified
+if (NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING
+            "Choose the type of build, options are: None Debug Release RelWithDebInfo MinSizeRel."
+            FORCE)
+endif ()
+
 if(WIN32)
   add_compile_options(/W3 /WX)
 else()
