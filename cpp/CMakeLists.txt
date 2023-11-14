@@ -9,9 +9,11 @@ else()
   add_compile_options(-Wall -Wextra -pedantic)
 endif()
 
-# Example lines for a new executable
-# add_executable(my_prog my_prog.cpp)
-# target_link_libraries(my_prog PUBLIC prd_generated)
-# install(TARGETS my_prog DESTINATION bin)
-
 add_subdirectory(../PETSIRD/cpp/generated PETSIRD_generated)
+
+find_package(ROOT REQUIRED COMPONENTS Core Imt RIO Net Hist Graf Graf3d Gpad Tree TreePlayer Rint Postscript Matrix Physics MathCore Thread MultiProc ROOTDataFrame)
+add_executable(root_to_petsird main.cpp)
+include_directories(root_to_petsird PUBLIC ../PETSIRD/cpp/generated)
+target_link_libraries(root_to_petsird PUBLIC prd_generated)
+target_link_libraries(root_to_petsird PUBLIC ROOT::Core ROOT::Imt ROOT::RIO ROOT::Net ROOT::Hist ROOT::Graf ROOT::Graf3d ROOT::Gpad ROOT::Tree ROOT::TreePlayer ROOT::Rint ROOT::Postscript ROOT::Matrix ROOT::Physics ROOT::MathCore ROOT::Thread ROOT::MultiProc ROOT::ROOTDataFrame)
+install(TARGETS root_to_petsird DESTINATION bin)
