@@ -6,6 +6,7 @@ dependencies:
   - bash-completion>=2.11
   - cmake>=3.21.3
   - compilers
+  - dvc-azure=2.23.0
   - fmt>=8.1.1
   - gh=2.38.0
   - h5py>=3.7.0
