@@ -165,8 +165,8 @@ get_scanner_info(float radius, int n_detectors, int n_rings, float detector_z_di
     {
       // Create a new detector
       prd::Detector d;
-      d.x = radius * std::sin(angle);
-      d.y = radius * std::cos(angle);
+      d.x = radius * std::cos(angle);
+      d.y = radius * std::sin(angle);
       d.z = ((-n_rings/2.0f)*detector_z_dim) +detector_z_dim*r;
       d.id = detector_id++;
       detectors.push_back(d);
@@ -399,9 +399,13 @@ int main(int argc, char** argv)
           std::cout << "  energy_1_idx: " << event.energy_1_idx << std::endl;
           std::cout << "  energy_2_idx: " << event.energy_2_idx << std::endl;
           std::cout << "  detector 1 position: " << scanner.detectors[event.detector_1_id].x << ", " << scanner.detectors[event.detector_1_id].y << ", " << scanner.detectors[event.detector_1_id].z << std::endl;
-          std::cout << "  detector 2 position: " << scanner.detectors[event.detector_2_id].x << ", " << scanner.detectors[event.detector_2_id].y << ", " << scanner.detectors[event.detector_2_id].z << std::endl;
           std::cout << "  GlobalPosition 1: " << globalPosX1 << ", " << globalPosY1 << ", " << globalPosZ1 << std::endl;
+          float distance_1 = std::sqrt(std::pow(scanner.detectors[event.detector_1_id].x-globalPosX1, 2) + std::pow(scanner.detectors[event.detector_1_id].y-globalPosY1, 2) + std::pow(scanner.detectors[event.detector_1_id].z-globalPosZ1, 2));
+          std::cout << "  Distance 1: " << distance_1 << std::endl;
+          std::cout << "  detector 2 position: " << scanner.detectors[event.detector_2_id].x << ", " << scanner.detectors[event.detector_2_id].y << ", " << scanner.detectors[event.detector_2_id].z << std::endl;
           std::cout << "  GlobalPosition 2: " << globalPosX2 << ", " << globalPosY2 << ", " << globalPosZ2 << std::endl;
+          float distance_2 = std::sqrt(std::pow(scanner.detectors[event.detector_2_id].x-globalPosX2, 2) + std::pow(scanner.detectors[event.detector_2_id].y-globalPosY2, 2) + std::pow(scanner.detectors[event.detector_2_id].z-globalPosZ2, 2));
+          std::cout << "  Distance 2: " << distance_2 << std::endl;
         }
 
         long this_time_block = static_cast<long>(time1*1.0e3 / scanner.listmode_time_block_duration);
