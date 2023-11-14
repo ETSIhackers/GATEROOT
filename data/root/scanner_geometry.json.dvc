@@ -1,0 +1,5 @@
+outs:
+- md5: d72e659b3d195ce2bb6a834ea112f139
+  size: 523
+  hash: md5
+  path: scanner_geometry.json
