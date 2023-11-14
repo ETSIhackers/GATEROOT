@@ -89,6 +89,8 @@
 #include <time.h>
 #include <cmath>
 
+#include <nlohmann/json.hpp>
+
 // PETSIRD Includes
 #include "protocols.h"
 #include "types.h"
@@ -96,43 +98,123 @@
 
 using namespace std ;
 
-// ETSI PET scanner model (cylindricalPET)
-#define N_RINGS                 40 // ETSIPETscanner: Number of physical rings
-#define N_DET                  600 // ETSIPETscanner: Detectors per ring
-#define S_WIDTH                380 // ETSIPETscanner: Number of radial sinogram bins ### CHECK ###
-#define N_RSEC                  60 // ETSIPETscanner: Number of resector
-#define N_RSEC_xy               60 // BIOGRAPH VISION: Number of rsectors per ring (transaxially)
-#define N_RSEC_z                 1 // BIOGRAPH VISION: Regular
-#define N_MODULE                16 // ETSIPETscanner: Number of modules (2x8)
-#define N_MOD_xy                 2 // ETSIPETscanner: Number of tangential modules
-#define N_MOD_z                  8 // ETSIPETscanner: Number of axial modules
-#define N_SUBMOD                 1 // ETSIPETscanner: Number of submodules (1x1)
-#define N_SMOD_xy                1 // ETSIPETscanner: Number of tangential submodules
-#define N_SMOD_z                 1 // ETSIPETscanner: Number of axial submodules
-#define N_CRYSTAL               25 // ETSIPETscanner: Number of crystals (5x5)
-#define N_CRY_xy                 5 // ETSIPETscanner: Number of tangential crystals
-#define N_CRY_z                  5 // ETSIPETscanner: Number of axial crystals
-#define MAX_D_RING              39 // ETSIPETscanner: Maximum ring difference
-#define NUMBER_OF_TOF_BINS      62 // ETSIPETscanner: Number of TOF bins
-#define NUMBER_OF_ENERGY_BINS   1
-#define RADIUS                  313.f // Includes DOI
-#define TxVirtualCrystalNUM      0 // ETSIPETscanner: Set the number of virtual crystals that you wish to interleave transaxially in the gaps between TxPhysCrystalNUM physical crystals
-#define AxVirtualCrystalNUM      0 // ETSIPETscanner: Set the number of virtual crystals that you wish to interleave axially in the gaps between AxPhysCrystalNUM physical crystal rings
-#define TxPhysCrystalNUM        10 // ETSIPETscanner: Number of physical crystals every which you wish to add TxVirtualCrystalNUM virtual crystals transaxially
-#define AxPhysCrystalNUM         5 // ETSIPETscanner: Number of physical crystal rings every which you wish to add  AxVirtualCrystalNUM virtual crystal rings
+struct ScannerGeometry
+{
+  int n_rings;
+  int n_det;
+  int s_width;
+  int n_rsec;
+  int n_rsec_xy;
+  int n_rsec_z;
+  int n_module;
+  int n_mod_xy;
+  int n_mod_z;
+  int n_submod;
+  int n_smod_xy;
+  int n_smod_z;
+  int n_crystal;
+  int n_cry_xy;
+  int n_cry_z;
+  int max_d_ring;
+  int number_of_tof_bins;
+  int number_of_energy_bins;
+  float radius;
+  int tx_virtual_crystal_num;
+  int ax_virtual_crystal_num;
+  int tx_phys_crystal_num;
+  int ax_phys_crystal_num;
+};
+
+void WriteScannerGeometry(const ScannerGeometry& scanner_geometry, const std::string& filename)
+{
+  nlohmann::json j;
+  j["n_rings"] = scanner_geometry.n_rings;
+  j["n_det"] = scanner_geometry.n_det;
+  j["s_width"] = scanner_geometry.s_width;
+  j["n_rsec"] = scanner_geometry.n_rsec;
+  j["n_rsec_xy"] = scanner_geometry.n_rsec_xy;
+  j["n_rsec_z"] = scanner_geometry.n_rsec_z;
+  j["n_module"] = scanner_geometry.n_module;
+  j["n_mod_xy"] = scanner_geometry.n_mod_xy;
+  j["n_mod_z"] = scanner_geometry.n_mod_z;
+  j["n_submod"] = scanner_geometry.n_submod;
+  j["n_smod_xy"] = scanner_geometry.n_smod_xy;
+  j["n_smod_z"] = scanner_geometry.n_smod_z;
+  j["n_crystal"] = scanner_geometry.n_crystal;
+  j["n_cry_xy"] = scanner_geometry.n_cry_xy;
+  j["n_cry_z"] = scanner_geometry.n_cry_z;
+  j["max_d_ring"] = scanner_geometry.max_d_ring;
+  j["number_of_tof_bins"] = scanner_geometry.number_of_tof_bins;
+  j["number_of_energy_bins"] = scanner_geometry.number_of_energy_bins;
+  j["radius"] = scanner_geometry.radius;
+  j["tx_virtual_crystal_num"] = scanner_geometry.tx_virtual_crystal_num;
+  j["ax_virtual_crystal_num"] = scanner_geometry.ax_virtual_crystal_num;
+  j["tx_phys_crystal_num"] = scanner_geometry.tx_phys_crystal_num;
+  j["ax_phys_crystal_num"] = scanner_geometry.ax_phys_crystal_num;
+
+  std::ofstream o(filename);
+  o << std::setw(4) << j << std::endl;
+}
+
+// Function for reading json scanner geometry
+ScannerGeometry ReadScannerGeometry(const std::string& filename)
+{
+  std::ifstream i(filename);
+  nlohmann::json j;
+  i >> j;
+
+  ScannerGeometry scanner_geometry;
+  scanner_geometry.n_rings = j["n_rings"];
+  scanner_geometry.n_det = j["n_det"];
+  scanner_geometry.s_width = j["s_width"];
+  scanner_geometry.n_rsec = j["n_rsec"];
+  scanner_geometry.n_rsec_xy = j["n_rsec_xy"];
+  scanner_geometry.n_rsec_z = j["n_rsec_z"];
+  scanner_geometry.n_module = j["n_module"];
+  scanner_geometry.n_mod_xy = j["n_mod_xy"];
+  scanner_geometry.n_mod_z = j["n_mod_z"];
+  scanner_geometry.n_submod = j["n_submod"];
+  scanner_geometry.n_smod_xy = j["n_smod_xy"];
+  scanner_geometry.n_smod_z = j["n_smod_z"];
+  scanner_geometry.n_crystal = j["n_crystal"];
+  scanner_geometry.n_cry_xy = j["n_cry_xy"];
+  scanner_geometry.n_cry_z = j["n_cry_z"];
+  scanner_geometry.max_d_ring = j["max_d_ring"];
+  scanner_geometry.number_of_tof_bins = j["number_of_tof_bins"];
+  scanner_geometry.number_of_energy_bins = j["number_of_energy_bins"];
+  scanner_geometry.radius = j["radius"];
+  scanner_geometry.tx_virtual_crystal_num = j["tx_virtual_crystal_num"];
+  scanner_geometry.ax_virtual_crystal_num = j["ax_virtual_crystal_num"];
+  scanner_geometry.tx_phys_crystal_num = j["tx_phys_crystal_num"];
+  scanner_geometry.ax_phys_crystal_num = j["ax_phys_crystal_num"];
+  return scanner_geometry;
+}
 
 void usage()
 {
-  std::cout << "Usage: ./root_to_petsird -r <root_prefix> -p <petsird_file> [-n <number_of_root_files>] [-v]" << std::endl;
-  std::cout << "  -r, --root-prefix <root_prefix>            Prefix of the root files" << std::endl;
-  std::cout << "  -p, --petsird-file <petsird_file>          Output PETSiRD file" << std::endl;
-  std::cout << "  -n, --number-of-root-files <number>        Number of root files to process (default: 2)" << std::endl;
-  std::cout << "  -v, --verbose                              Verbose output" << std::endl;
-  std::cout << "  -h, --help                                 Print this help" << std::endl;
+  std::cout << "Usage: root_to_petsird [options]" << std::endl;
+  std::cout << "Options:" << std::endl;
+  std::cout << "  -r, --root-prefix <root_prefix>             Prefix of root files" << std::endl;
+  std::cout << "  -s, --scanner-geometry-file <filename>      Scanner geometry file" << std::endl;
+  std::cout << "  -p, --petsird-file <filename>               PETSiRD file" << std::endl;
+  std::cout << "  -n, --number-of-root-files <number>         Number of root files" << std::endl;
+  std::cout << "  -v, --verbose                               Verbose output" << std::endl;
+  std::cout << "  -h, --help                                  Print this help message" << std::endl;
 }
 
-int calculate_detector_id(int gantry_id, int rsector_id, int module_id, int submodule_id, int crystal_id, int rmin = 0)
+int calculate_detector_id(int gantry_id, int rsector_id, int module_id, int submodule_id, int crystal_id, ScannerGeometry& scannerGeometry, int rmin = 0)
 {
+  // In code below replace N_RINGS with scannerGeometry.n_rings, etc.
+  int N_DET = scannerGeometry.n_det;
+  int N_RSEC_xy = scannerGeometry.n_rsec_xy;
+  int N_RSEC_z = scannerGeometry.n_rsec_z;
+  int N_MOD_xy = scannerGeometry.n_mod_xy;
+  int N_MOD_z = scannerGeometry.n_mod_z;
+  int N_SMOD_xy = scannerGeometry.n_smod_xy;
+  int N_SMOD_z = scannerGeometry.n_smod_z;
+  int N_CRY_xy = scannerGeometry.n_cry_xy;
+  int N_CRY_z = scannerGeometry.n_cry_z;
+
   int ring = (Int_t)(gantry_id)*N_RSEC_z*N_MOD_z*N_SMOD_z*N_CRY_z
         + (Int_t)(rsector_id/N_RSEC_xy)*N_MOD_z*N_SMOD_z*N_CRY_z
         + (Int_t)(module_id/N_MOD_xy)*N_SMOD_z*N_CRY_z
@@ -149,8 +231,14 @@ int calculate_detector_id(int gantry_id, int rsector_id, int module_id, int subm
 
 // single ring as example
 prd::ScannerInformation
-get_scanner_info(float radius, int n_detectors, int n_rings, float detector_z_dim = 3.2f)
+get_scanner_info(ScannerGeometry& scannerGeometry, float detector_z_dim = 3.2f)
 {
+  float radius = scannerGeometry.radius;
+  int n_detectors = scannerGeometry.n_det;
+  int n_rings = scannerGeometry.n_rings;
+  unsigned long NUMBER_OF_TOF_BINS = static_cast<unsigned long>(scannerGeometry.number_of_tof_bins);
+  unsigned long NUMBER_OF_ENERGY_BINS = static_cast<unsigned long>(scannerGeometry.number_of_energy_bins);
+
   std::vector<float> angles;
   for (int i = 0; i < n_detectors; ++i)
   {
@@ -224,8 +312,8 @@ uint32_t energyToIdx(float energy, const prd::ScannerInformation& scanner_info)
 
 int main(int argc, char** argv)
 {
-
   std::string root_prefix  = std::string{};
+  std::string scanner_geometry_file = std::string{};
   std::string petsird_file = std::string{};
   int number_of_root_files = 2;
   bool verbose = false;
@@ -235,6 +323,8 @@ int main(int argc, char** argv)
     std::string arg = argv[i];
     if (arg == "-r" || arg == "--root-prefix") {
       root_prefix = argv[++i];
+    } else if (arg == "-s" || arg == "--scanner-geometry-file") {
+      scanner_geometry_file = argv[++i];
     } else if (arg == "-p" || arg == "--petsird-file") {
       petsird_file = argv[++i];
     } else if (arg == "-n" || arg == "--number-of-root-files") {
@@ -264,7 +354,18 @@ int main(int argc, char** argv)
 
   // Print arguments and exit
   std::cout << "root_prefix: " << root_prefix << std::endl;
+  std::cout << "scanner_geometry_file: " << scanner_geometry_file << std::endl;
   std::cout << "petsird_file: " << petsird_file << std::endl;
+
+  // Read scanner geometry
+  ScannerGeometry scannerGeometry;
+  if (scanner_geometry_file.empty()) {
+    std::cout << "Using default scanner geometry" << std::endl;
+    return 1;
+  } else {
+    scannerGeometry = ReadScannerGeometry(scanner_geometry_file);
+  }
+
   string filedir, inputfilename;
   Int_t   Trues = 0, Scatters = 0, Randoms = 0;
 
@@ -351,7 +452,7 @@ int main(int argc, char** argv)
 
   // Output PETSIRD
   prd::Header header;
-  prd::ScannerInformation scanner = get_scanner_info(RADIUS, N_DET, N_RINGS);
+  prd::ScannerInformation scanner = get_scanner_info(scannerGeometry);
 
   if (verbose) {
     // Print scanner information
@@ -385,8 +486,8 @@ int main(int argc, char** argv)
     {
 	    if (comptonPhantom1 == 0 && comptonPhantom2 == 0) {
         prd::CoincidenceEvent event;
-        event.detector_1_id = calculate_detector_id(gantryID1, rsectorID1, moduleID1, submoduleID1, crystalID1);
-        event.detector_2_id = calculate_detector_id(gantryID2, rsectorID2, moduleID2, submoduleID2, crystalID2);
+        event.detector_1_id = calculate_detector_id(gantryID1, rsectorID1, moduleID1, submoduleID1, crystalID1, scannerGeometry);
+        event.detector_2_id = calculate_detector_id(gantryID2, rsectorID2, moduleID2, submoduleID2, crystalID2, scannerGeometry);
         event.tof_idx = static_cast<uint32_t>(tofToIdx(1.0e12f*(time1 - time2), scanner));
         event.energy_1_idx = static_cast<uint32_t>(energyToIdx(1.0e3*energy1, scanner));
         event.energy_2_idx = static_cast<uint32_t>(energyToIdx(1.0e3*energy2, scanner));
