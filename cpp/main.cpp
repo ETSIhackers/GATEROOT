@@ -377,7 +377,7 @@ int main(int argc, char** argv)
   for (unsigned long long int i = 0 ; i < nentries ; i++)
   {
     if (i % 1000000 == 0) {
-      printf("Processing event %llu of %llu\n", i, nentries);
+      printf("Processing event %llu of %llu, (%f percent)\n", i, nentries, 100.0f*i/nentries);
     }
 
     Coincidences->GetEntry(i);
