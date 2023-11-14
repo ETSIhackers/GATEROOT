@@ -1,6 +1,10 @@
 #!/bin/bash
 
+set -euo pipefail
+
 # Check if azcopy is installed
+cd "$(dirname "$0")"
+
 if ! command -v azcopy &> /dev/null
 then
     wget -O azcopy.tar.gz https://aka.ms/downloadazcopy-v10-linux

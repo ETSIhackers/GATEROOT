@@ -5,13 +5,14 @@ channels:
 dependencies:
   - bash-completion>=2.11
   - cmake>=3.21.3
-  - fmt>=8.1.1
   - compilers
+  - fmt>=8.1.1
+  - gh=2.38.0
   - h5py>=3.7.0
   - hdf5>=1.12.1
   - howardhinnant_date>=3.0.1
   - ipykernel>=6.19.2
-  - gh=2.38.0
+  - just=1.16.0
   - ninja>=1.11.0
   - nlohmann_json>=3.11.2
   - numpy>=1.24.3
