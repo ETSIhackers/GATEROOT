@@ -178,7 +178,7 @@ get_scanner_info(float radius, int n_detectors, int n_rings, float detector_z_di
   FArray1D::shape_type tof_bin_edges_shape = { NUMBER_OF_TOF_BINS + 1 };
   FArray1D tof_bin_edges(tof_bin_edges_shape);
   for (std::size_t i = 0; i < tof_bin_edges.size(); ++i) {
-    tof_bin_edges[i] = (i - NUMBER_OF_TOF_BINS / 2.F) / NUMBER_OF_TOF_BINS * 2 * radius;
+    tof_bin_edges[i] = (i - NUMBER_OF_TOF_BINS / 2.F) / NUMBER_OF_TOF_BINS * 2 * radius * 0.8;
   }
   FArray1D::shape_type energy_bin_edges_shape = { NUMBER_OF_ENERGY_BINS + 1 };
   FArray1D energy_bin_edges(energy_bin_edges_shape);
@@ -429,6 +429,9 @@ int main(int argc, char** argv)
     }
   }
   writer.WriteTimeBlocks(time_block);
+  writer.EndTimeBlocks();
+  writer.Close();
+
   printf("Total Number of Coincidence Events in the ROOT file:= %llu ...\n",nentries );
   printf("Total Number of Coincidence Events registered in list-mode or sinogram format:= %lu ...\n", Counts_binned);  return(0);
 }
