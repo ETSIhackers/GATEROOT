@@ -22,4 +22,4 @@ default: run
     ninja
 
 @run: download-test-data build
-    cpp/build/root_to_petsird --root-prefix data/root/ETSIPETscanner_mIEC_ -p petsird.bin
+    cpp/build/root_to_petsird --root-prefix data/root/ETSIPETscanner_mIEC_ --petsird-file /dev/null

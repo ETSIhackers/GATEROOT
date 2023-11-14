@@ -1,6 +1,8 @@
 [core]
     analytics = false
     remote = azure
+[cache]
+    type = "hardlink,symlink"
 ['remote "azure"']
     url = azure://dvc
     account_name = etsinitiative
