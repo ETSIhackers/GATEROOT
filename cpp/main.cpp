@@ -483,6 +483,8 @@ int main(int argc, char** argv)
     // Print scanner information
     std::cout << "Scanner information:" << std::endl;
     std::cout << "  Number of detectors: " << scanner.NumberOfDetectors() << std::endl;
+    std::cout << "TOF bin edges: " << scanner.tof_bin_edges << std::endl;
+    std::cout << "Energy bin edges: " << scanner.energy_bin_edges << std::endl;
     for (auto d : scanner.detectors) {
       std::cout << "    Detector " << d.id << ": (" << d.x << ", " << d.y << ", " << d.z << ")" << std::endl;
     }
