@@ -259,7 +259,7 @@ get_scanner_info(ScannerGeometry& scannerGeometry)
   int n_rings = scannerGeometry.n_rings;
   unsigned long NUMBER_OF_TOF_BINS = static_cast<unsigned long>(scannerGeometry.number_of_tof_bins);
   unsigned long NUMBER_OF_ENERGY_BINS = static_cast<unsigned long>(scannerGeometry.number_of_energy_bins);
-  float arc_length = scanner_geometry.s_width * scanner_geometry.detector_y_dim / 2.0f;
+  float arc_length = scannerGeometry.s_width * scannerGeometry.detector_y_dim / 2.0f;
   float TxFOV = 2 * radius * sin (arc_length / (2 * radius) );
 
   std::vector<float> angles;
@@ -278,7 +278,7 @@ get_scanner_info(ScannerGeometry& scannerGeometry)
       prd::Detector d;
       d.x = radius * std::cos(angle);
       d.y = radius * std::sin(angle);
-      d.z = ((-n_rings/2.0f)*detector_z_dim) +detector_z_dim*r;
+      d.z = ((-n_rings/2.0f)*scannerGeometry.detector_z_dim) + scannerGeometry.detector_z_dim*r;
       d.id = detector_id++;
       detectors.push_back(d);
     }
@@ -294,15 +294,15 @@ get_scanner_info(ScannerGeometry& scannerGeometry)
   FArray1D::shape_type energy_bin_edges_shape = { NUMBER_OF_ENERGY_BINS + 1 };
   FArray1D energy_bin_edges(energy_bin_edges_shape);
   for (std::size_t i = 0; i < energy_bin_edges.size(); ++i) {
-    energy_bin_edges[i] = energy_LLD + i * (energy_ULD - energy_LLD) / NUMBER_OF_ENERGY_BINS;
+    energy_bin_edges[i] = scannerGeometry.energy_LLD + i * (scannerGeometry.energy_ULD - scannerGeometry.energy_LLD) / NUMBER_OF_ENERGY_BINS;
   }
   prd::ScannerInformation scanner_info;
   scanner_info.detectors = detectors;
   scanner_info.tof_bin_edges = tof_bin_edges;
-  scanner_info.tof_resolution = scanner_geometry.TOF_resolution*0.3; // conversion from psec to mm (e.g. 200ps TOF is equivalent to 60mm uncertainty)
+  scanner_info.tof_resolution = scannerGeometry.TOF_resolution*0.3; // conversion from psec to mm (e.g. 200ps TOF is equivalent to 60mm uncertainty)
   scanner_info.energy_bin_edges = energy_bin_edges;
-  scanner_info.energy_resolution_at_511 = scanner_geometry.EnergyResolutionAt511;    // as fraction of 511 (e.g. 0.11F)
-  scanner_info.listmode_time_block_duration = scanner_geometry.LM_TimeBlockDuration; // ms
+  scanner_info.energy_resolution_at_511 = scannerGeometry.EnergyResolutionAt511;    // as fraction of 511 (e.g. 0.11F)
+  scanner_info.listmode_time_block_duration = scannerGeometry.LM_TimeBlockDuration; // ms
   return scanner_info;
 }
 
