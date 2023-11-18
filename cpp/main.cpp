@@ -259,6 +259,8 @@ get_scanner_info(ScannerGeometry& scannerGeometry)
   int n_rings = scannerGeometry.n_rings;
   unsigned long NUMBER_OF_TOF_BINS = static_cast<unsigned long>(scannerGeometry.number_of_tof_bins);
   unsigned long NUMBER_OF_ENERGY_BINS = static_cast<unsigned long>(scannerGeometry.number_of_energy_bins);
+  float energy_LLD = scannerGeometry.energy_LLD;
+  float energy_ULD =scannerGeometry.energy_ULD;
   float arc_length = scannerGeometry.s_width * scannerGeometry.detector_y_dim / 2.0f;
   float TxFOV = 2 * radius * sin (arc_length / (2 * radius) );
 
@@ -294,7 +296,7 @@ get_scanner_info(ScannerGeometry& scannerGeometry)
   FArray1D::shape_type energy_bin_edges_shape = { NUMBER_OF_ENERGY_BINS + 1 };
   FArray1D energy_bin_edges(energy_bin_edges_shape);
   for (std::size_t i = 0; i < energy_bin_edges.size(); ++i) {
-    energy_bin_edges[i] = scannerGeometry.energy_LLD + i * (scannerGeometry.energy_ULD - scannerGeometry.energy_LLD) / NUMBER_OF_ENERGY_BINS;
+    energy_bin_edges[i] = energy_LLD + i * (energy_ULD - energy_LLD) / NUMBER_OF_ENERGY_BINS;
   }
   prd::ScannerInformation scanner_info;
   scanner_info.detectors = detectors;
