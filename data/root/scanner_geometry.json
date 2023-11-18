@@ -27,7 +27,7 @@
     "detector_z_dim": 3.2,
     "energy_LLD": 430,
     "energy_ULD": 650,
-	"EnergyResolutionAt511": 0.11,
+    "EnergyResolutionAt511": 0.11,
     "TOF_resolution": 200,
     "LM_TimeBlockDuration": 1
 }
