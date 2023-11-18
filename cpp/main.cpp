@@ -252,7 +252,7 @@ int calculate_detector_id(int gantry_id, int rsector_id, int module_id, int subm
 
 // single ring as example
 prd::ScannerInformation
-get_scanner_info(ScannerGeometry& scannerGeometry, float detector_z_dim = 3.2f)
+get_scanner_info(ScannerGeometry& scannerGeometry, float detector_z_dim)
 {
   float radius = scannerGeometry.radius;
   int n_detectors = scannerGeometry.n_det;
