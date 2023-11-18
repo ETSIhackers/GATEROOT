@@ -123,6 +123,11 @@ struct ScannerGeometry
   int ax_virtual_crystal_num;
   int tx_phys_crystal_num;
   int ax_phys_crystal_num;
+  float detector_x_dim, detector_y_dim, float detector_z_dim;
+  float energy_LLD, energy_ULD;
+  float EnergyResolutionAt511;
+  float TOF_resolution;
+  float LM_TimeBlockDuration;
 };
 
 void WriteScannerGeometry(const ScannerGeometry& scanner_geometry, const std::string& filename)
@@ -151,6 +156,14 @@ void WriteScannerGeometry(const ScannerGeometry& scanner_geometry, const std::st
   j["ax_virtual_crystal_num"] = scanner_geometry.ax_virtual_crystal_num;
   j["tx_phys_crystal_num"] = scanner_geometry.tx_phys_crystal_num;
   j["ax_phys_crystal_num"] = scanner_geometry.ax_phys_crystal_num;
+  j["detector_x_dim"] = scanner_geometry.detector_x_dim;
+  j["detector_y_dim"] = scanner_geometry.detector_y_dim;
+  j["detector_z_dim"] = scanner_geometry.detector_z_dim;
+  j["energy_LLD"] = scanner_geometry.energy_LLD;
+  j["energy_ULD"] = scanner_geometry.energy_ULD;
+  j["EnergyResolutionAt511"] = scanner_geometry.EnergyResolutionAt511;
+  j["TOF_resolution"] = scanner_geometry.TOF_resolution;
+  j["LM_TimeBlockDuration"] = scanner_geometry.LM_TimeBlockDuration;
 
   std::ofstream o(filename);
   o << std::setw(4) << j << std::endl;
@@ -187,6 +200,14 @@ ScannerGeometry ReadScannerGeometry(const std::string& filename)
   scanner_geometry.ax_virtual_crystal_num = j["ax_virtual_crystal_num"];
   scanner_geometry.tx_phys_crystal_num = j["tx_phys_crystal_num"];
   scanner_geometry.ax_phys_crystal_num = j["ax_phys_crystal_num"];
+  scanner_geometry.detector_x_dim = j["detector_x_dim"];
+  scanner_geometry.detector_y_dim = j["detector_y_dim"];
+  scanner_geometry.detector_z_dim = j["detector_z_dim"];
+  scanner_geometry.energy_LLD = j["energy_LLD"];
+  scanner_geometry.energy_LLD = j["energy_ULD"];
+  scanner_geometry.EnergyResolutionAt511 = j["EnergyResolutionAt511"];
+  scanner_geometry.TOF_resolution = j["TOF_resolution"];
+  scanner_geometry.LM_TimeBlockDuration = j["LM_TimeBlockDuration"];
   return scanner_geometry;
 }
 
@@ -238,6 +259,8 @@ get_scanner_info(ScannerGeometry& scannerGeometry, float detector_z_dim = 3.2f)
   int n_rings = scannerGeometry.n_rings;
   unsigned long NUMBER_OF_TOF_BINS = static_cast<unsigned long>(scannerGeometry.number_of_tof_bins);
   unsigned long NUMBER_OF_ENERGY_BINS = static_cast<unsigned long>(scannerGeometry.number_of_energy_bins);
+  float arc_length = scanner_geometry.s_width * detector_y_dim / 2.0f;
+  float TxFOV = 2 * radius * sin (arc_length / (2 * radius) );
 
   std::vector<float> angles;
   for (int i = 0; i < n_detectors; ++i)
@@ -266,26 +289,26 @@ get_scanner_info(ScannerGeometry& scannerGeometry, float detector_z_dim = 3.2f)
   FArray1D::shape_type tof_bin_edges_shape = { NUMBER_OF_TOF_BINS + 1 };
   FArray1D tof_bin_edges(tof_bin_edges_shape);
   for (std::size_t i = 0; i < tof_bin_edges.size(); ++i) {
-    tof_bin_edges[i] = (i - NUMBER_OF_TOF_BINS / 2.F) / NUMBER_OF_TOF_BINS * 2 * radius * 0.8;
+    tof_bin_edges[i] = (i - NUMBER_OF_TOF_BINS / 2.F) / NUMBER_OF_TOF_BINS * TxFOV;
   }
   FArray1D::shape_type energy_bin_edges_shape = { NUMBER_OF_ENERGY_BINS + 1 };
   FArray1D energy_bin_edges(energy_bin_edges_shape);
   for (std::size_t i = 0; i < energy_bin_edges.size(); ++i) {
-    energy_bin_edges[i] = 430.F + i * (650.F - 430.F) / NUMBER_OF_ENERGY_BINS;
+    energy_bin_edges[i] = energy_LLD + i * (energy_ULD - energy_LLD) / NUMBER_OF_ENERGY_BINS;
   }
   prd::ScannerInformation scanner_info;
   scanner_info.detectors = detectors;
   scanner_info.tof_bin_edges = tof_bin_edges;
-  scanner_info.tof_resolution = 9.4F; // in mm
+  scanner_info.tof_resolution = scanner_geometry.TOF_resolution*0.3; // conversion from psec to mm (e.g. 200ps TOF is equivalent to 60mm uncertainty)
   scanner_info.energy_bin_edges = energy_bin_edges;
-  scanner_info.energy_resolution_at_511 = .11F;    // as fraction of 511
-  scanner_info.listmode_time_block_duration = 1.F; // ms
+  scanner_info.energy_resolution_at_511 = scanner_geometry.EnergyResolutionAt511;    // as fraction of 511 (e.g. 0.11F)
+  scanner_info.listmode_time_block_duration = scanner_geometry.LM_TimeBlockDuration; // ms
   return scanner_info;
 }
 
 uint32_t tofToIdx(float tof, const prd::ScannerInformation& scanner_info)
 {
-  float tof_mm = tof * 0.03;
+  float tof_mm = tof * 0.15; //conversion from time difference (in psec) to spatial position in LOR (in mm) DT*C/2
   for (size_t i = 0; i < scanner_info.tof_bin_edges.size() - 1; ++i)
   {
     if (tof_mm >= scanner_info.tof_bin_edges[i] && tof_mm < scanner_info.tof_bin_edges[i+1])
@@ -372,18 +395,18 @@ int main(int argc, char** argv)
   //####################################################################
   //#             Declaration of leaves types - TTree Coincidences     #
   //####################################################################
-  Float_t         		axialPos, rotationAngle, sinogramS, sinogramTheta;
-  Char_t          		comptVolName1[255], comptVolName2[255];
-  Int_t           		compton1, compton2, gantryID1, gantryID2;
-  Int_t           		runID, sourceID1, sourceID2, eventID1, eventID2;
-  Int_t           		layerID1, layerID2, crystalID1, crystalID2;
-  Int_t           		submoduleID1, submoduleID2, moduleID1, moduleID2, rsectorID1, rsectorID2;
-  Int_t           		comptonPhantom1, comptonPhantom2;
-  Float_t         		energy1, energy2;
-  Float_t         		globalPosX1, globalPosX2, globalPosY1, globalPosY2, globalPosZ1, globalPosZ2;
-  Float_t         		sourcePosX1, sourcePosX2, sourcePosY1, sourcePosY2, sourcePosZ1, sourcePosZ2;
-  Double_t        		time1, time2;
-  unsigned long long int        nentries;
+  Float_t         			axialPos, rotationAngle, sinogramS, sinogramTheta;
+  Char_t          			comptVolName1[255], comptVolName2[255];
+  Int_t           			compton1, compton2, gantryID1, gantryID2;
+  Int_t           			runID, sourceID1, sourceID2, eventID1, eventID2;
+  Int_t           			layerID1, layerID2, crystalID1, crystalID2;
+  Int_t           			submoduleID1, submoduleID2, moduleID1, moduleID2, rsectorID1, rsectorID2;
+  Int_t           			comptonPhantom1, comptonPhantom2;
+  Float_t         			energy1, energy2; //in MeV
+  Float_t         			globalPosX1, globalPosX2, globalPosY1, globalPosY2, globalPosZ1, globalPosZ2; //in mm
+  Float_t         			sourcePosX1, sourcePosX2, sourcePosY1, sourcePosY2, sourcePosZ1, sourcePosZ2; //in mm
+  Double_t        			time1, time2; //in sec
+  unsigned long long int   	nentries;
 
   //######################################################################################
   //#                        Set branch addresses - TTree Coincidences                   #
