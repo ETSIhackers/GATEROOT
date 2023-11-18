@@ -123,7 +123,7 @@ struct ScannerGeometry
   int ax_virtual_crystal_num;
   int tx_phys_crystal_num;
   int ax_phys_crystal_num;
-  float detector_x_dim, detector_y_dim, float detector_z_dim;
+  float detector_x_dim, detector_y_dim, detector_z_dim;
   float energy_LLD, energy_ULD;
   float EnergyResolutionAt511;
   float TOF_resolution;
@@ -252,14 +252,14 @@ int calculate_detector_id(int gantry_id, int rsector_id, int module_id, int subm
 
 // single ring as example
 prd::ScannerInformation
-get_scanner_info(ScannerGeometry& scannerGeometry, float detector_z_dim)
+get_scanner_info(ScannerGeometry& scannerGeometry)
 {
   float radius = scannerGeometry.radius;
   int n_detectors = scannerGeometry.n_det;
   int n_rings = scannerGeometry.n_rings;
   unsigned long NUMBER_OF_TOF_BINS = static_cast<unsigned long>(scannerGeometry.number_of_tof_bins);
   unsigned long NUMBER_OF_ENERGY_BINS = static_cast<unsigned long>(scannerGeometry.number_of_energy_bins);
-  float arc_length = scanner_geometry.s_width * detector_y_dim / 2.0f;
+  float arc_length = scanner_geometry.s_width * scanner_geometry.detector_y_dim / 2.0f;
   float TxFOV = 2 * radius * sin (arc_length / (2 * radius) );
 
   std::vector<float> angles;
