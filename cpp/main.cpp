@@ -90,6 +90,9 @@
 #include <cmath>
 
 #include <nlohmann/json.hpp>
+#include <xtensor/xview.hpp>
+#include <xtensor/xio.hpp>
+#include <iostream>
 
 // PETSIRD Includes
 #include "protocols.h"
