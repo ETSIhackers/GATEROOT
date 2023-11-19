@@ -90,9 +90,9 @@
 #include <cmath>
 
 #include <nlohmann/json.hpp>
+
 #include <xtensor/xview.hpp>
 #include <xtensor/xio.hpp>
-#include <iostream>
 
 // PETSIRD Includes
 #include "protocols.h"
@@ -131,6 +131,9 @@ struct ScannerGeometry
   float EnergyResolutionAt511;
   float TOF_resolution;
   float LM_TimeBlockDuration;
+  float ArcLength;
+  float TxFOV;
+  float TxFOV_TOF;
 };
 
 void WriteScannerGeometry(const ScannerGeometry& scanner_geometry, const std::string& filename)
@@ -167,6 +170,10 @@ void WriteScannerGeometry(const ScannerGeometry& scanner_geometry, const std::st
   j["EnergyResolutionAt511"] = scanner_geometry.EnergyResolutionAt511;
   j["TOF_resolution"] = scanner_geometry.TOF_resolution;
   j["LM_TimeBlockDuration"] = scanner_geometry.LM_TimeBlockDuration;
+
+  j["ArcLength"] = scanner_geometry.s_width * scanner_geometry.detector_y_dim / 2.0f;
+  j["TxFOV"] = 2 * scanner_geometry.radius * sin (scanner_geometry.ArcLength / (2 * scanner_geometry.radius) );
+  j["TxFOV_TOF"] = scanner_geometry.TxFOV + 0.3*scanner_geometry.TOF_resolution;
 
   std::ofstream o(filename);
   o << std::setw(4) << j << std::endl;
@@ -207,10 +214,15 @@ ScannerGeometry ReadScannerGeometry(const std::string& filename)
   scanner_geometry.detector_y_dim = j["detector_y_dim"];
   scanner_geometry.detector_z_dim = j["detector_z_dim"];
   scanner_geometry.energy_LLD = j["energy_LLD"];
-  scanner_geometry.energy_LLD = j["energy_ULD"];
+  scanner_geometry.energy_ULD = j["energy_ULD"];
   scanner_geometry.EnergyResolutionAt511 = j["EnergyResolutionAt511"];
   scanner_geometry.TOF_resolution = j["TOF_resolution"];
   scanner_geometry.LM_TimeBlockDuration = j["LM_TimeBlockDuration"];
+
+  scanner_geometry.ArcLength = scanner_geometry.s_width * scanner_geometry.detector_y_dim / 2.0f;
+  scanner_geometry.TxFOV = 2 * scanner_geometry.radius * sin (scanner_geometry.ArcLength / (2 * scanner_geometry.radius) );
+  scanner_geometry.TxFOV_TOF = scanner_geometry.TxFOV + 0.3*scanner_geometry.TOF_resolution;
+
   return scanner_geometry;
 }
 
@@ -264,8 +276,6 @@ get_scanner_info(ScannerGeometry& scannerGeometry)
   unsigned long NUMBER_OF_ENERGY_BINS = static_cast<unsigned long>(scannerGeometry.number_of_energy_bins);
   float energy_LLD = scannerGeometry.energy_LLD;
   float energy_ULD =scannerGeometry.energy_ULD;
-  float arc_length = scannerGeometry.s_width * scannerGeometry.detector_y_dim / 2.0f;
-  float TxFOV = 2 * radius * sin (arc_length / (2 * radius) );
 
   std::vector<float> angles;
   for (int i = 0; i < n_detectors; ++i)
@@ -294,7 +304,7 @@ get_scanner_info(ScannerGeometry& scannerGeometry)
   FArray1D::shape_type tof_bin_edges_shape = { NUMBER_OF_TOF_BINS + 1 };
   FArray1D tof_bin_edges(tof_bin_edges_shape);
   for (std::size_t i = 0; i < tof_bin_edges.size(); ++i) {
-    tof_bin_edges[i] = (i - NUMBER_OF_TOF_BINS / 2.F) / NUMBER_OF_TOF_BINS * TxFOV;
+    tof_bin_edges[i] = (i - NUMBER_OF_TOF_BINS / 2.F) / NUMBER_OF_TOF_BINS * scannerGeometry.TxFOV_TOF;
   }
   FArray1D::shape_type energy_bin_edges_shape = { NUMBER_OF_ENERGY_BINS + 1 };
   FArray1D energy_bin_edges(energy_bin_edges_shape);
@@ -311,16 +321,19 @@ get_scanner_info(ScannerGeometry& scannerGeometry)
   return scanner_info;
 }
 
-uint32_t tofToIdx(float tof, const prd::ScannerInformation& scanner_info)
+uint32_t tofToIdx(double delta_time_psec, const prd::ScannerInformation& scanner_info)
 {
-  float tof_mm = tof * 0.15; //conversion from time difference (in psec) to spatial position in LOR (in mm) DT*C/2
+  float tofPos_mm = delta_time_psec * 0.15; //conversion from time difference (in psec) to spatial position in LOR (in mm) DT*C/2
   for (size_t i = 0; i < scanner_info.tof_bin_edges.size() - 1; ++i)
   {
-    if (tof_mm >= scanner_info.tof_bin_edges[i] && tof_mm < scanner_info.tof_bin_edges[i+1])
+    if (tofPos_mm >= scanner_info.tof_bin_edges[i] && tofPos_mm < scanner_info.tof_bin_edges[i+1])
     {
       return static_cast<uint32_t>(i);
     }
   }
+  std::cout << "WARNING: TOF out of range: " << tofPos_mm << std::endl;
+  //std::stringstream ss;
+  //ss << "WARNING: TOF out of range: " << tofPos_mm;
   throw std::runtime_error("TOF out of range");
 }
 
@@ -334,7 +347,7 @@ uint32_t energyToIdx(float energy, const prd::ScannerInformation& scanner_info)
     }
   }
   std::stringstream ss;
-  ss << "Energy out of range: " << energy;
+  ss << "WARNING: Energy out of range: " << energy;
   throw std::runtime_error(ss.str());
 }
 
@@ -492,9 +505,9 @@ int main(int argc, char** argv)
     std::cout << "TOF bin edges: " << tof_bin_edges << std::endl;
     const auto& energy_bin_edges = scanner.energy_bin_edges;
     std::cout << "Energy bin edges: " << energy_bin_edges << std::endl;
-    for (auto d : scanner.detectors) {
-      std::cout << "    Detector " << d.id << ": (" << d.x << ", " << d.y << ", " << d.z << ")" << std::endl;
-    }
+    //for (auto d : scanner.detectors) {
+    //  std::cout << "    Detector " << d.id << ": (" << d.x << ", " << d.y << ", " << d.z << ")" << std::endl;
+    //}
   }
 
   prd::ExamInformation exam;
@@ -522,7 +535,11 @@ int main(int argc, char** argv)
         prd::CoincidenceEvent event;
         event.detector_1_id = calculate_detector_id(gantryID1, rsectorID1, moduleID1, submoduleID1, crystalID1, scannerGeometry);
         event.detector_2_id = calculate_detector_id(gantryID2, rsectorID2, moduleID2, submoduleID2, crystalID2, scannerGeometry);
-        event.tof_idx = static_cast<uint32_t>(tofToIdx(1.0e12f*(time1 - time2), scanner));
+        double dt_psec = 1.0e12f*(time1 - time2); //in psec
+        if (abs(dt_psec) > scannerGeometry.TxFOV_TOF/0.3f) {
+          continue;
+        }
+        event.tof_idx = static_cast<uint32_t>(tofToIdx(dt_psec, scanner));
         event.energy_1_idx = static_cast<uint32_t>(energyToIdx(1.0e3*energy1, scanner));
         event.energy_2_idx = static_cast<uint32_t>(energyToIdx(1.0e3*energy2, scanner));
 
@@ -542,7 +559,6 @@ int main(int argc, char** argv)
           float distance_2 = std::sqrt(std::pow(scanner.detectors[event.detector_2_id].x-globalPosX2, 2) + std::pow(scanner.detectors[event.detector_2_id].y-globalPosY2, 2) + std::pow(scanner.detectors[event.detector_2_id].z-globalPosZ2, 2));
           std::cout << "  Distance 2: " << distance_2 << std::endl;
         }
-
         long this_time_block = static_cast<long>(time1*1.0e3 / scanner.listmode_time_block_duration);
         if (this_time_block != current_time_block) {
           if (current_time_block != -1) {
@@ -553,7 +569,6 @@ int main(int argc, char** argv)
           time_block.id = static_cast<uint32_t>(current_time_block);
         }
         time_block.prompt_events.push_back(event);
-
         Counts_binned++;
         Trues++;
       } else {

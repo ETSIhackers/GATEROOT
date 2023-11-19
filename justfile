@@ -26,7 +26,7 @@ default: run
     dvc pull
 
 @run: build download-test-data
-    cpp/build/root_to_petsird --root-prefix data/root/ETSIPETscanner_mIEC_ --number-of-root-files 1 --petsird-file petsird.bin -s data/root/scanner_geometry.json -v
+    cpp/build/root_to_petsird --root-prefix data/root/ETSIPETscanner_mIEC_ --number-of-root-files 1 --petsird-file petsird.bin -s data/root/scanner_geometry.json
 
 @run-full: build download-test-data-full
-    cpp/build/root_to_petsird --root-prefix data/root/ETSIPETscanner_mIEC_ --number-of-root-files 36 --petsird-file petsird-full.bin -s data/root/scanner_geometry.json -v
+    cpp/build/root_to_petsird --root-prefix data/root/ETSIPETscanner_mIEC_ --number-of-root-files 36 --petsird-file petsird-full.bin -s data/root/scanner_geometry.json
