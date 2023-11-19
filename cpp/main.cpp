@@ -482,9 +482,13 @@ int main(int argc, char** argv)
   if (verbose) {
     // Print scanner information
     std::cout << "Scanner information:" << std::endl;
-    std::cout << "  Number of detectors: " << scanner.NumberOfDetectors() << std::endl;
-    std::cout << "TOF bin edges: " << scanner.tof_bin_edges << std::endl;
-    std::cout << "Energy bin edges: " << scanner.energy_bin_edges << std::endl;
+    std::cout << "Number of detectors: " << scanner.NumberOfDetectors() << std::endl;
+    std::cout << "Number of TOF bins: " << scanner.NumberOfTOFBins() << std::endl;
+    std::cout << "Number of energy bins: " << scanner.NumberOfEnergyBins() << std::endl;
+    const auto& tof_bin_edges = scanner.tof_bin_edges;
+    std::cout << "TOF bin edges: " << tof_bin_edges << std::endl;
+    const auto& energy_bin_edges = scanner.tof_bin_edges;
+    std::cout << "Energy bin edges: " << energy_bin_edges << std::endl;
     for (auto d : scanner.detectors) {
       std::cout << "    Detector " << d.id << ": (" << d.x << ", " << d.y << ", " << d.z << ")" << std::endl;
     }
