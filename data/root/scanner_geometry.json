@@ -2,6 +2,7 @@
     "ax_phys_crystal_num": 5,
     "ax_virtual_crystal_num": 0,
     "max_d_ring": 39,
+    "n_cry_layer":1,
     "n_cry_xy": 5,
     "n_cry_z": 5,
     "n_crystal": 25,
