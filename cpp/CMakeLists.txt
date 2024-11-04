@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.12.0) # older would work, but could give warnings on policy CMP0074
-project(PETSIRDUseCaseTemplate VERSION 0.1.0)
+project(root_to_petsird VERSION 0.2.0)
 
 set(CMAKE_CXX_STANDARD 17)
 
@@ -16,11 +16,14 @@ else()
   add_compile_options(-Wall -Wextra -pedantic)
 endif()
 
-add_subdirectory(../PETSIRD/cpp/generated PETSIRD_generated)
+set(PETSIRD_dir ../PETSIRD/cpp/generated)
+add_subdirectory(${PETSIRD_dir} PETSIRD_generated)
 
 find_package(ROOT REQUIRED COMPONENTS Core Imt RIO Net Hist Graf Graf3d Gpad Tree TreePlayer Rint Postscript Matrix Physics MathCore Thread MultiProc ROOTDataFrame)
 add_executable(root_to_petsird main.cpp)
-include_directories(root_to_petsird PUBLIC ../PETSIRD/cpp/generated)
-target_link_libraries(root_to_petsird PUBLIC prd_generated)
+target_include_directories(root_to_petsird PUBLIC ${PETSIRD_dir})
+# needed for helpers
+target_include_directories(root_to_petsird PUBLIC ${PETSIRD_dir}/..)
+target_link_libraries(root_to_petsird PUBLIC petsird_generated)
 target_link_libraries(root_to_petsird PUBLIC ROOT::Core ROOT::Imt ROOT::RIO ROOT::Net ROOT::Hist ROOT::Graf ROOT::Graf3d ROOT::Gpad ROOT::Tree ROOT::TreePlayer ROOT::Rint ROOT::Postscript ROOT::Matrix ROOT::Physics ROOT::MathCore ROOT::Thread ROOT::MultiProc ROOT::ROOTDataFrame)
 install(TARGETS root_to_petsird DESTINATION bin)
