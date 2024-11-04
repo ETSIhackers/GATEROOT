@@ -15,21 +15,21 @@
 //  *********************************************************************
 //
 //######################################################################################
-//# Authors   : Nicolas A Karakatsanis, Sadek A. Nehmeh, CR Schmidtlein                #
+//# Authors   : Nicolas A Karakatsanis,                                                #
 //#                                                                                    #
-//# Program   : Bin_GATE_v1.0.c  29-JUL-2010                                           #
+//# Date  03-NOV-2024                                                                  #
 //#                                                                                    #
 //# Objective : To read the coincidences TTree from the .root file, and generates the  #
 //#             corresponding Michelogram and Projection files.                        #
 //#                                                                                    #
-//# Input     : Monte Carlo data from GATE and egsPET                                  #
+//# Input     : Monte Carlo data from GATE                                             #
 //#                                                                                    #
 //# Output    : 1 Michelogram  files according to various binning definitions          #
 //#           : 2 Projection  files according to various binning definitions           #
 //#                                                                                    #
 //######################################################################################
 //#                                                                                    #
-//# This file is last modified on Nov 12, 2023 by: N. Karakatsanis                     #
+//# This file is last modified on Nov 03, 2024 by: N. Karakatsanis                     #
 //#                                                                                    #
 //# The data are input from a root file produced by Gate simulating extended FOV of    #
 //# mCT scanner. This scanner will have 5xFOV thus the root file contains information  #
@@ -38,11 +38,10 @@
 //#                                                                                    #
 //# The virtual rings between the blocks are taken into consideration here.            #
 //#                                                                                    #
-//# The central FOV is taken into consideration => N_RINGS = 55                        #
+//# The central FOV is taken into consideration                                        #
 //# The maximum and minimum rings should be specified if the user wishes to change     #
 //# the number or the order of gantries.                                               #
 //#                                                                                    #
-//# The odd rings are removed....                                                      #
 //#                                                                                    #
 //#                                                                                    #
 //#                                                                                    #
@@ -101,8 +100,7 @@
 
 using namespace std ;
 
-#include "petsird_helpers.h"
-
+//#include "petsird_helpers.h"
 // these are constants for now
 constexpr uint32_t NUMBER_OF_ENERGY_BINS = 3;
 constexpr uint32_t NUMBER_OF_TOF_BINS = 300;
@@ -158,6 +156,7 @@ struct ScannerGeometry
   float ArcLength;
   float TxFOV;
   float TxFOV_TOF;
+  float module_axial_pitch;
 };
 
 void WriteScannerGeometry(const ScannerGeometry& scanner_geometry, const std::string& filename)
@@ -207,6 +206,8 @@ void WriteScannerGeometry(const ScannerGeometry& scanner_geometry, const std::st
   j["ArcLength"] = scanner_geometry.s_width * scanner_geometry.detector_y_dim / 2.0f;
   j["TxFOV"] = 2 * scanner_geometry.radius * sin (scanner_geometry.ArcLength / (2 * scanner_geometry.radius) );
   j["TxFOV_TOF"] = scanner_geometry.TxFOV + 0.3*scanner_geometry.TOF_resolution;
+  j["module_axial_pitch"] = scanner_geometry.n_cry_z * scanner_geometry.detector_z_dim + (scanner_geometry.n_cry_z - 1) * scanner_geometry.cry_ax_gap;
+
 
   std::ofstream o(filename);
   o << std::setw(4) << j << std::endl;
@@ -264,7 +265,7 @@ ScannerGeometry ReadScannerGeometry(const std::string& filename)
   scanner_geometry.ArcLength = scanner_geometry.s_width * scanner_geometry.detector_y_dim / 2.0f;
   scanner_geometry.TxFOV = 2 * scanner_geometry.radius * sin (scanner_geometry.ArcLength / (2 * scanner_geometry.radius) );
   scanner_geometry.TxFOV_TOF = scanner_geometry.TxFOV + 0.3*scanner_geometry.TOF_resolution;
-  scanner_geometry.module_axial_pitch = n_cry_z * detector_z_dim + (n_cry_z - 1) * cry_ax_gap;
+  scanner_geometry.module_axial_pitch = scanner_geometry.n_cry_z * scanner_geometry.detector_z_dim + (scanner_geometry.n_cry_z - 1) * scanner_geometry.cry_ax_gap;
 
   return scanner_geometry;
 }
@@ -321,11 +322,28 @@ get_scanner_info(ScannerGeometry& scannerGeometry)
   float energy_LLD = scannerGeometry.energy_LLD;
   float energy_ULD =scannerGeometry.energy_ULD;
 
-  std::vector<float> angles;
-  for (int i = 0; i < n_detectors; ++i)
-  {
-    angles.push_back(static_cast<float>(2 * M_PI * (1.0f*i) / n_detectors));
+  typedef yardl::NDArray<float, 1> FArray1D;
+  // TOF info (in mm)
+  FArray1D::shape_type tof_bin_edges_shape = { NUMBER_OF_TOF_BINS + 1 };
+  FArray1D tof_bin_edges(tof_bin_edges_shape);
+  for (std::size_t i = 0; i < tof_bin_edges.size(); ++i) {
+    tof_bin_edges[i] = (i - NUMBER_OF_TOF_BINS / 2.F) / NUMBER_OF_TOF_BINS * scannerGeometry.TxFOV_TOF;
   }
+  FArray1D::shape_type energy_bin_edges_shape = { NUMBER_OF_ENERGY_BINS + 1 };
+  FArray1D energy_bin_edges(energy_bin_edges_shape);
+  for (std::size_t i = 0; i < energy_bin_edges.size(); ++i) {
+    energy_bin_edges[i] = energy_LLD + i * (energy_ULD - energy_LLD) / NUMBER_OF_ENERGY_BINS;
+  }
+  petsird::ScannerInformation scanner_info;
+  scanner_info.scanner_geometry = get_scanner_geometry();
+  scanner_info.detectors = detectors;
+  scanner_info.tof_bin_edges = tof_bin_edges;
+  scanner_info.tof_resolution = scannerGeometry.TOF_resolution*0.3; // conversion from psec to mm (e.g. 200ps TOF is equivalent to 60mm uncertainty)
+  scanner_info.energy_bin_edges = energy_bin_edges;
+  scanner_info.energy_resolution_at_511 = scannerGeometry.EnergyResolutionAt511;    // as fraction of 511 (e.g. 0.11F)
+  scanner_info.listmode_time_block_duration = scannerGeometry.LM_TimeBlockDuration; // ms
+  return scanner_info;
+}
 
 //! return a cuboid volume
 petsird::BoxSolidVolume
@@ -333,13 +351,13 @@ get_crystal()
 {
   using petsird::Coordinate;
   petsird::BoxShape crystal_shape{ Coordinate{ { 0, 0, 0 } },
-                                   Coordinate{ { 0, 0, detector_z_dim } },
-                                   Coordinate{ { 0, detector_y_dim, detector_z_dim } },
-                                   Coordinate{ { 0, detector_y_dim, 0 } },
-                                   Coordinate{ { detector_x_dim, 0, 0 } },
-                                   Coordinate{ { detector_x_dim, 0, detector_z_dim } },
-                                   Coordinate{ { detector_x_dim, detector_y_dim, detector_z_dim } },
-                                   Coordinate{ { detector_x_dim, detector_y_dim, 0 } } };
+                                   Coordinate{ { 0, 0, scannerGeometry.detector_z_dim } },
+                                   Coordinate{ { 0, scannerGeometry.detector_y_dim, scannerGeometry.detector_z_dim } },
+                                   Coordinate{ { 0, scannerGeometry.detector_y_dim, 0 } },
+                                   Coordinate{ { scannerGeometry.detector_x_dim, 0, 0 } },
+                                   Coordinate{ { scannerGeometry.detector_x_dim, 0, scannerGeometry.detector_z_dim } },
+                                   Coordinate{ { scannerGeometry.detector_x_dim, scannerGeometry.detector_y_dim, scannerGeometry.detector_z_dim } },
+                                   Coordinate{ { scannerGeometry.detector_x_dim, scannerGeometry.detector_y_dim, 0 } } };
 
   petsird::BoxSolidVolume crystal{ crystal_shape, /* material_id */ 1 };
   return crystal;
@@ -356,9 +374,9 @@ get_detector_module()
       for (int rep_cry_xy = 0; rep_cry_xy < n_cry_xy; ++rep_cry_xy)
         for (int rep_cry_z = 0; rep_cry_z < n_cry_z; ++rep_cry_z)
           {
-            petsird::RigidTransformation transform{ { { 1.0, 0.0, 0.0, radius + rep_cry_layer * detector_x_dim },
-                                                      { 0.0, 1.0, 0.0,  (rep_cry_xy - n_cry_xy / 2) * detector_y_dim },
-                                                      { 0.0, 0.0, 1.0,  (rep_cry_z - n_cry_z / 2) * detector_z_dim } } };
+            petsird::RigidTransformation transform{ { { 1.0, 0.0, 0.0, radius + rep_cry_layer * sscannerGeometry.detector_x_dim },
+                                                      { 0.0, 1.0, 0.0,  (rep_cry_xy - n_cry_xy / 2) * scannerGeometry.detector_y_dim },
+                                                      { 0.0, 0.0, 1.0,  (rep_cry_z - n_cry_z / 2) * scannerGeometry.detector_z_dim } } };
             rep_volume.transforms.push_back(transform);
             //rep_volume.ids.push_back(rep_cry_layer + n_cry_layer * (rep_cry_xy + n_cry_xy * rep_cry_z));
             rep_volume.ids.push_back(rep_cry_z + n_cry_z * (rep_cry_xy + n_cry_xy * rep_cry_layer));
@@ -388,68 +406,28 @@ get_scanner_geometry()
         angles.push_back(static_cast<float>((2 * M_PI * i) / n_rsec_xy));
       }
 
-        for (int rep_smod_xy = 0; rep_smod_xy < n_smod_xy; ++rep_smod_xy)
-          for (int rep_smod_z = 0; rep_smod_z < n_smod_z; ++rep_smod_z)
-            for (int rep_mod_xy = 0; rep_mod_xy < n_mod_xy; ++rep_mod_xy)
-              for (int rep_mod_z = 0; rep_mod_z < n_mod_z; ++rep_mod_z)
-                for (auto angle : angles)
-                  for (int rep_rsec_z = 0; rep_rsec_z < n_rsec_z; ++rep_rsec_z)
-                    {
-                      petsird::RigidTransformation transform{ { { std::cos(angle), std::sin(angle), 0.F, 0.F },
-                                                                { -std::sin(angle), std::cos(angle), 0.F, (rep_smod_xy - n_smod_xy / 2) * n_smod_xy * detector_y_dim
-                                                                                                        + (rep_mod_xy - n_mod_xy / 2) * n_mod_xy * n_smod_xy * detector_y_dim},
-                                                                { 0.F, 0.F, 1.F, (rep_smod_z - n_smod_z / 2) * n_smod_z * detector_z_dim
-                                                                               + (rep_mod_z - n_mod_z / 2) * n_mod_z * n_smod_z * detector_z_dim
-                                                                               + (rep_rsec_z - n_rsec_z / 2) * n_rsec_z * n_mod_z * n_smod_z * detector_z_dim} } };
+      for (int rep_smod_xy = 0; rep_smod_xy < n_smod_xy; ++rep_smod_xy)
+        for (int rep_smod_z = 0; rep_smod_z < n_smod_z; ++rep_smod_z)
+          for (int rep_mod_xy = 0; rep_mod_xy < n_mod_xy; ++rep_mod_xy)
+            for (int rep_mod_z = 0; rep_mod_z < n_mod_z; ++rep_mod_z)
+              for (auto angle : angles)
+                for (int rep_rsec_z = 0; rep_rsec_z < n_rsec_z; ++rep_rsec_z)
+                  {
+                    petsird::RigidTransformation transform{ { { std::cos(angle), std::sin(angle), 0.F, 0.F },
+                                                              { -std::sin(angle), std::cos(angle), 0.F, (rep_smod_xy - n_smod_xy / 2) * n_smod_xy * scannerGeometry.detector_y_dim
+                                                                                                      + (rep_mod_xy - n_mod_xy / 2) * n_mod_xy * n_smod_xy * scannerGeometry.detector_y_dim},
+                                                              { 0.F, 0.F, 1.F, (rep_smod_z - n_smod_z / 2) * n_smod_z * scannerGeometry.detector_z_dim
+                                                                              + (rep_mod_z - n_mod_z / 2) * n_mod_z * n_smod_z * scannerGeometry.detector_z_dim
+                                                                              + (rep_rsec_z - n_rsec_z / 2) * n_rsec_z * n_mod_z * n_smod_z * scannerGeometry.detector_z_dim} } };
 
-                      rep_module.ids.push_back(module_id++);
-                      rep_module.transforms.push_back(transform);
-                    }
+                    rep_module.ids.push_back(module_id++);
+                    rep_module.transforms.push_back(transform);
+                  }
   }
   petsird::ScannerGeometry scanner_geometry;
   scanner_geometry.replicated_modules.push_back(rep_module);
   scanner_geometry.ids.push_back(0);
   return scanner_geometry;
-}
-
-
-  std::vector<petsird::Detector> detectors;
-  int detector_id = 0;
-  for (int r =0; r < n_rings; r++)
-  {
-    for (auto angle : angles)
-    {
-      // Create a new detector
-      petsird::Detector d;
-      d.x = radius * std::cos(angle);
-      d.y = radius * std::sin(angle);
-      d.z = ((-n_rings/2.0f)*scannerGeometry.detector_z_dim) + scannerGeometry.detector_z_dim*r;
-      d.id = detector_id++;
-      detectors.push_back(d);
-    }
-  }
-
-  typedef yardl::NDArray<float, 1> FArray1D;
-  // TOF info (in mm)
-  FArray1D::shape_type tof_bin_edges_shape = { NUMBER_OF_TOF_BINS + 1 };
-  FArray1D tof_bin_edges(tof_bin_edges_shape);
-  for (std::size_t i = 0; i < tof_bin_edges.size(); ++i) {
-    tof_bin_edges[i] = (i - NUMBER_OF_TOF_BINS / 2.F) / NUMBER_OF_TOF_BINS * scannerGeometry.TxFOV_TOF;
-  }
-  FArray1D::shape_type energy_bin_edges_shape = { NUMBER_OF_ENERGY_BINS + 1 };
-  FArray1D energy_bin_edges(energy_bin_edges_shape);
-  for (std::size_t i = 0; i < energy_bin_edges.size(); ++i) {
-    energy_bin_edges[i] = energy_LLD + i * (energy_ULD - energy_LLD) / NUMBER_OF_ENERGY_BINS;
-  }
-  petsird::ScannerInformation scanner_info;
-  scanner_info.scanner_geometry = get_scanner_geometry();
-  //scanner_info.detectors = detectors;
-  scanner_info.tof_bin_edges = tof_bin_edges;
-  scanner_info.tof_resolution = scannerGeometry.TOF_resolution*0.3; // conversion from psec to mm (e.g. 200ps TOF is equivalent to 60mm uncertainty)
-  scanner_info.energy_bin_edges = energy_bin_edges;
-  scanner_info.energy_resolution_at_511 = scannerGeometry.EnergyResolutionAt511;    // as fraction of 511 (e.g. 0.11F)
-  scanner_info.listmode_time_block_duration = scannerGeometry.LM_TimeBlockDuration; // ms
-  return scanner_info;
 }
 
 uint32_t tofToIdx(double delta_time_psec, const petsird::ScannerInformation& scanner_info)
@@ -681,14 +659,14 @@ int main(int argc, char** argv)
           std::cout << "  tof_idx: " << event.tof_idx << std::endl;
           std::cout << "  energy_1_idx: " << event.energy_indices[0] << std::endl;
           std::cout << "  energy_2_idx: " << event.energy_indices[1] << std::endl;
-          std::cout << "  detector 1 position: " << scanner.detectors[event.detector_ids[0]].x << ", " << scanner.detectors[event.detector_ids[0]].y << ", " << scanner.detectors[event.detector_ids[0]].z << std::endl;
-          std::cout << "  GlobalPosition 1: " << globalPosX1 << ", " << globalPosY1 << ", " << globalPosZ1 << std::endl;
-          float distance_1 = std::sqrt(std::pow(scanner.detectors[event.detector_ids[0]].x-globalPosX1, 2) + std::pow(scanner.detectors[event.detector_ids[0]].y-globalPosY1, 2) + std::pow(scanner.detectors[event.detector_ids[0]].z-globalPosZ1, 2));
-          std::cout << "  Distance 1: " << distance_1 << std::endl;
-          std::cout << "  detector 2 position: " << scanner.detectors[event.detector_ids[1]].x << ", " << scanner.detectors[event.detector_ids[1]].y << ", " << scanner.detectors[event.detector_ids[1]].z << std::endl;
-          std::cout << "  GlobalPosition 2: " << globalPosX2 << ", " << globalPosY2 << ", " << globalPosZ2 << std::endl;
-          float distance_2 = std::sqrt(std::pow(scanner.detectors[event.detector_ids[1]].x-globalPosX2, 2) + std::pow(scanner.detectors[event.detector_ids[1]].y-globalPosY2, 2) + std::pow(scanner.detectors[event.detector_ids[1]].z-globalPosZ2, 2));
-          std::cout << "  Distance 2: " << distance_2 << std::endl;
+          //std::cout << "  detector 1 position: " << scanner.detectors[event.detector_ids[0]].x << ", " << scanner.detectors[event.detector_ids[0]].y << ", " << scanner.detectors[event.detector_ids[0]].z << std::endl;
+          //std::cout << "  GlobalPosition 1: " << globalPosX1 << ", " << globalPosY1 << ", " << globalPosZ1 << std::endl;
+          //float distance_1 = std::sqrt(std::pow(scanner.detectors[event.detector_ids[0]].x-globalPosX1, 2) + std::pow(scanner.detectors[event.detector_ids[0]].y-globalPosY1, 2) + std::pow(scanner.detectors[event.detector_ids[0]].z-globalPosZ1, 2));
+          //std::cout << "  Distance 1: " << distance_1 << std::endl;
+          //std::cout << "  detector 2 position: " << scanner.detectors[event.detector_ids[1]].x << ", " << scanner.detectors[event.detector_ids[1]].y << ", " << scanner.detectors[event.detector_ids[1]].z << std::endl;
+          //std::cout << "  GlobalPosition 2: " << globalPosX2 << ", " << globalPosY2 << ", " << globalPosZ2 << std::endl;
+          //float distance_2 = std::sqrt(std::pow(scanner.detectors[event.detector_ids[1]].x-globalPosX2, 2) + std::pow(scanner.detectors[event.detector_ids[1]].y-globalPosY2, 2) + std::pow(scanner.detectors[event.detector_ids[1]].z-globalPosZ2, 2));
+          //std::cout << "  Distance 2: " << distance_2 << std::endl;
         }
         long this_time_block = static_cast<long>(time1*1.0e3 / scanner.event_time_block_duration);
         if (this_time_block != current_time_block) {
