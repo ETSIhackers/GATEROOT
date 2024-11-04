@@ -378,8 +378,8 @@ get_scanner_geometry(ScannerGeometry& scannerGeometry)
                 for (int rep_rsec_z = 0; rep_rsec_z < scannerGeometry.n_rsec_z; ++rep_rsec_z)
                   {
                     petsird::RigidTransformation transform{ { { std::cos(angle), std::sin(angle), 0.F, 0.F },
-                                                              { -std::sin(angle), std::cos(angle), 0.F, (rep_smod_xy - scannerGeometry.n_smod_xy / 2) * scannerGeometry.n_smod_xy * scannerGeometry.detector_y_dim
-                                                                                                      + (rep_mod_xy - scannerGeometry.n_mod_xy / 2) * scannerGeometry.n_mod_xy * scannerGeometry.n_smod_xy * scannerGeometry.detector_y_dim},
+                                                              { -std::sin(angle), std::cos(angle), 0.F, std::sin(angle)*((rep_smod_xy - scannerGeometry.n_smod_xy / 2) * scannerGeometry.n_smod_xy * scannerGeometry.detector_y_dim
+                                                                                                      + (rep_mod_xy - scannerGeometry.n_mod_xy / 2) * scannerGeometry.n_mod_xy * scannerGeometry.n_smod_xy * scannerGeometry.detector_y_dim)},
                                                               { 0.F, 0.F, 1.F, (rep_smod_z - scannerGeometry.n_smod_z / 2) * scannerGeometry.n_smod_z * scannerGeometry.detector_z_dim
                                                                               + (rep_mod_z - scannerGeometry.n_mod_z / 2) * scannerGeometry.n_mod_z * scannerGeometry.n_smod_z * scannerGeometry.detector_z_dim
                                                                               + (rep_rsec_z - scannerGeometry.n_rsec_z / 2) * scannerGeometry.n_rsec_z * scannerGeometry.n_mod_z * scannerGeometry.n_smod_z * scannerGeometry.detector_z_dim} } };
