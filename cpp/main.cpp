@@ -98,7 +98,6 @@
 #include "protocols.h"
 #include "types.h"
 #include "binary/protocols.h"
-#include "petsird_helpers.h"
 
 using namespace std ;
 
