@@ -101,18 +101,6 @@
 using namespace std ;
 
 //#include "petsird_helpers.h"
-// these are constants for now
-constexpr uint32_t NUMBER_OF_ENERGY_BINS = 3;
-constexpr uint32_t NUMBER_OF_TOF_BINS = 300;
-constexpr float RADIUS = 400.F;
-constexpr std::array<float, 3> CRYSTAL_LENGTH{ 20.F, 4.F, 4.F };
-constexpr std::array<float, 3> NUM_CRYSTALS_PER_MODULE{ 2, 4, 5 };
-constexpr uint32_t NUM_MODULES_ALONG_RING{ 20 };
-constexpr uint32_t NUM_MODULES_ALONG_AXIS{ 2 };
-constexpr float MODULE_AXIS_SPACING{ (NUM_CRYSTALS_PER_MODULE[2] + 4) * CRYSTAL_LENGTH[2] };
-
-constexpr uint32_t NUMBER_OF_TIME_BLOCKS = 6;
-constexpr float COUNT_RATE = 500.F;
 
 struct ScannerGeometry
 {
@@ -335,17 +323,27 @@ get_detector_module(ScannerGeometry& scannerGeometry)
   petsird::ReplicatedBoxSolidVolume rep_volume;
   {
     rep_volume.object = get_crystal(scannerGeometry);
-    for (int rep_cry_layer = 0; rep_cry_layer < scannerGeometry.n_cry_layers; ++rep_cry_layer)
-      for (int rep_cry_xy = 0; rep_cry_xy < scannerGeometry.n_cry_xy; ++rep_cry_xy)
-        for (int rep_cry_z = 0; rep_cry_z < scannerGeometry.n_cry_z; ++rep_cry_z)
-          {
-            petsird::RigidTransformation transform{ { { 1.0, 0.0, 0.0, scannerGeometry.radius + rep_cry_layer * scannerGeometry.detector_x_dim },
-                                                      { 0.0, 1.0, 0.0,  (rep_cry_xy - scannerGeometry.n_cry_xy / 2) * scannerGeometry.detector_y_dim },
-                                                      { 0.0, 0.0, 1.0,  (rep_cry_z - scannerGeometry.n_cry_z / 2) * scannerGeometry.detector_z_dim } } };
-            rep_volume.transforms.push_back(transform);
-            //rep_volume.ids.push_back(rep_cry_layer + n_cry_layer * (rep_cry_xy + n_cry_xy * rep_cry_z));
-            rep_volume.ids.push_back(rep_cry_z + scannerGeometry.n_cry_z * (rep_cry_xy + scannerGeometry.n_cry_xy * rep_cry_layer));
-          }
+    int crystal_id = 0;
+    for (int rep_mod_xy = 0; rep_mod_xy < scannerGeometry.n_mod_xy; ++rep_mod_xy)
+        for (int rep_mod_z = 0; rep_mod_z < scannerGeometry.n_mod_z; ++rep_mod_z)
+          for (int rep_smod_xy = 0; rep_smod_xy < scannerGeometry.n_smod_xy; ++rep_smod_xy)
+            for (int rep_smod_z = 0; rep_smod_z < scannerGeometry.n_smod_z; ++rep_smod_z)
+              for (int rep_cry_xy = 0; rep_cry_xy < scannerGeometry.n_cry_xy; ++rep_cry_xy)
+                for (int rep_cry_z = 0; rep_cry_z < scannerGeometry.n_cry_z; ++rep_cry_z)
+                  for (int rep_cry_layer = 0; rep_cry_layer < scannerGeometry.n_cry_layers; ++rep_cry_layer)
+                    {
+                      petsird::RigidTransformation transform{ { { 1.0, 0.0, 0.0, scannerGeometry.radius + rep_cry_layer * scannerGeometry.detector_x_dim },
+                                                                { 0.0, 1.0, 0.0, (rep_mod_xy - scannerGeometry.n_mod_xy / 2) * scannerGeometry.n_smod_xy * scannerGeometry.n_cry_xy * scannerGeometry.detector_y_dim
+                                                                               + (rep_smod_xy - scannerGeometry.n_smod_xy / 2) * scannerGeometry.n_cry_xy * scannerGeometry.detector_y_dim
+                                                                               + (rep_cry_xy - scannerGeometry.n_cry_xy / 2) * scannerGeometry.detector_y_dim  },
+                                                                { 0.0, 0.0, 1.0, (rep_mod_z - scannerGeometry.n_mod_z / 2) * scannerGeometry.n_smod_z * scannerGeometry.n_cry_z * scannerGeometry.detector_z_dim
+                                                                               + (rep_smod_z - scannerGeometry.n_smod_z / 2) * scannerGeometry.n_cry_z * scannerGeometry.detector_z_dim
+                                                                               + (rep_cry_z - scannerGeometry.n_cry_z / 2) * scannerGeometry.detector_z_dim } } };
+                      rep_volume.transforms.push_back(transform);
+                      //rep_volume.ids.push_back(rep_cry_layer + n_cry_layer * (rep_cry_xy + n_cry_xy * rep_cry_z));
+                      //rep_volume.ids.push_back(rep_cry_z + scannerGeometry.n_cry_z * (rep_cry_xy + scannerGeometry.n_cry_xy * rep_cry_layer));
+                      rep_volume.ids.push_back(crystal_id++);
+                    }
   }
 
   petsird::DetectorModule detector_module;
@@ -370,23 +368,16 @@ get_scanner_geometry(ScannerGeometry& scannerGeometry)
         angles.push_back(static_cast<float>((2 * M_PI * i) / scannerGeometry.n_rsec_xy));
       }
 
-      for (int rep_smod_xy = 0; rep_smod_xy < scannerGeometry.n_smod_xy; ++rep_smod_xy)
-        for (int rep_smod_z = 0; rep_smod_z < scannerGeometry.n_smod_z; ++rep_smod_z)
-          for (int rep_mod_xy = 0; rep_mod_xy < scannerGeometry.n_mod_xy; ++rep_mod_xy)
-            for (int rep_mod_z = 0; rep_mod_z < scannerGeometry.n_mod_z; ++rep_mod_z)
-              for (auto angle : angles)
-                for (int rep_rsec_z = 0; rep_rsec_z < scannerGeometry.n_rsec_z; ++rep_rsec_z)
-                  {
-                    petsird::RigidTransformation transform{ { { std::cos(angle), std::sin(angle), 0.F, 0.F },
-                                                              { -std::sin(angle), std::cos(angle), 0.F, std::sin(angle)*((rep_smod_xy - scannerGeometry.n_smod_xy / 2) * scannerGeometry.n_smod_xy * scannerGeometry.detector_y_dim
-                                                                                                      + (rep_mod_xy - scannerGeometry.n_mod_xy / 2) * scannerGeometry.n_mod_xy * scannerGeometry.n_smod_xy * scannerGeometry.detector_y_dim)},
-                                                              { 0.F, 0.F, 1.F, (rep_smod_z - scannerGeometry.n_smod_z / 2) * scannerGeometry.n_smod_z * scannerGeometry.detector_z_dim
-                                                                              + (rep_mod_z - scannerGeometry.n_mod_z / 2) * scannerGeometry.n_mod_z * scannerGeometry.n_smod_z * scannerGeometry.detector_z_dim
-                                                                              + (rep_rsec_z - scannerGeometry.n_rsec_z / 2) * scannerGeometry.n_rsec_z * scannerGeometry.n_mod_z * scannerGeometry.n_smod_z * scannerGeometry.detector_z_dim} } };
+    for (auto angle : angles)
+      for (int rep_rsec_z = 0; rep_rsec_z < scannerGeometry.n_rsec_z; ++rep_rsec_z)
+        {
+          petsird::RigidTransformation transform{ { { std::cos(angle), std::sin(angle), 0.F, 0.F },
+                                                    { -std::sin(angle), std::cos(angle), 0.F, 0.F},
+                                                    { 0.F, 0.F, 1.F, (rep_rsec_z - scannerGeometry.n_rsec_z / 2) * scannerGeometry.n_mod_z * scannerGeometry.n_smod_z * scannerGeometry.n_cry_z * scannerGeometry.detector_z_dim} } };
 
-                    rep_module.ids.push_back(module_id++);
-                    rep_module.transforms.push_back(transform);
-                  }
+          rep_module.ids.push_back(module_id++);
+          rep_module.transforms.push_back(transform);
+        }
   }
   petsird::ScannerGeometry scanner_geometry;
   scanner_geometry.replicated_modules.push_back(rep_module);
