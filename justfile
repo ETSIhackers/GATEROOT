@@ -37,12 +37,12 @@ default: run
 
 
 @run_0min_voxBrain: build
-    cpp/build/root_to_petsird --root-prefix ROOT_DATA/voxBrain/ETSIPETscanner256mmAFOV_positronSource/ETSIPETscanner256mmAFOV_voxBrain_ --number-of-root-files 0 --petsird-file petsird_ETSIPETscanner256mmAFOV_voxBrain_0min_v0.2.bin -s data/root/scanner_geometry.json
+    cpp/build/root_to_petsird --root-prefix ROOT_DATA/voxBrain/ETSIPETscanner256mmAFOV_positronSource/ETSIPETscanner256mmAFOV_voxBrain_ --number-of-root-files 0 --petsird-file petsird_ETSIPETscanner256mmAFOV_voxBrain_0min_v0.2.bin -s data/root/ETSIPETscanner256mmAFOV_geometry.json
 
 @run_3min_voxBrain: build
-    cpp/build/root_to_petsird --root-prefix ROOT_DATA/voxBrain/ETSIPETscanner256mmAFOV_positronSource/ETSIPETscanner256mmAFOV_voxBrain_ --number-of-root-files 18 --petsird-file petsird_ETSIPETscanner256mmAFOV_voxBrain_3min_v0.2.bin -s data/root/scanner_geometry.json
+    cpp/build/root_to_petsird --root-prefix ROOT_DATA/voxBrain/ETSIPETscanner256mmAFOV_positronSource/ETSIPETscanner256mmAFOV_voxBrain_ --number-of-root-files 18 --petsird-file petsird_ETSIPETscanner256mmAFOV_voxBrain_3min_v0.2.bin -s data/root/ETSIPETscanner256mmAFOV_geometry.json
 
 @run_6min_voxBrain: build
-    cpp/build/root_to_petsird --root-prefix ROOT_DATA/voxBrain/ETSIPETscanner256mmAFOV_positronSource/ETSIPETscanner256mmAFOV_voxBrain_ --number-of-root-files 36 --petsird-file petsird_ETSIPETscanner256mmAFOV_voxBrain_6min_v0.2.bin -s data/root/scanner_geometry.json
+    cpp/build/root_to_petsird --root-prefix ROOT_DATA/voxBrain/ETSIPETscanner256mmAFOV_positronSource/ETSIPETscanner256mmAFOV_voxBrain_ --number-of-root-files 36 --petsird-file petsird_ETSIPETscanner256mmAFOV_voxBrain_6min_v0.2.bin -s data/root/ETSIPETscanner256mmAFOV_geometry.json
 
 @run: run_0min_voxBrain
