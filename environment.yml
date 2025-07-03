@@ -1,24 +1,20 @@
-name: petsird
+name: GATEROOT
 channels:
   - conda-forge
   - defaults
 dependencies:
   - bash-completion>=2.11
   - cmake>=3.21.3
-  - compilers
+  - cxx-compiler
   - dvc-azure=2.23.0
   - fmt>=8.1.1
   - gh=2.38.0
-  - h5py>=3.7.0
   - hdf5>=1.12.1
   - howardhinnant_date>=3.0.1
-  - ipykernel>=6.19.2
-  - just=1.16.0
+  - just=1.36.0
   - ninja>=1.11.0
   - nlohmann_json>=3.11.2
-  - numpy>=1.24.3
-  - python=3.9
-  - root=6.28
+  - root_base>=6.28
   - shellcheck>=0.8.0
-  - xtensor-fftw>=0.2.5
-  - xtensor>=0.24.2
+  - xtensor>=0.24.2, <0.26.0
+  - xtensor-blas
