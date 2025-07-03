@@ -97,6 +97,8 @@
 #include "protocols.h"
 #include "types.h"
 #include "binary/protocols.h"
+#include "petsird_helpers/create.h"
+#include "petsird_helpers/geometry.h"
 
 using namespace std ;
 
@@ -270,32 +272,28 @@ void usage()
   std::cout << "  -h, --help                                  Print this help message" << std::endl;
 }
 
-int calculate_detector_id(int gantry_id, int rsector_id, int module_id, int submodule_id, int crystal_id, ScannerGeometry& scannerGeometry, int rmin = 0)
+int calculate_element_index(int module_id, int submodule_id, int crystal_id, const ScannerGeometry& scannerGeometry)
 {
-  // In code below replace N_RINGS with scannerGeometry.n_rings, etc.
-  int N_DET = scannerGeometry.n_det;
-  int N_RSEC_xy = scannerGeometry.n_rsec_xy;
-  int N_RSEC_z = scannerGeometry.n_rsec_z;
-  int N_MOD_xy = scannerGeometry.n_mod_xy;
-  int N_MOD_z = scannerGeometry.n_mod_z;
+  //int N_DET = scannerGeometry.n_det;
+  //int N_MOD_xy = scannerGeometry.n_mod_xy;
+  //int N_MOD_z = scannerGeometry.n_mod_z;
   int N_SMOD_xy = scannerGeometry.n_smod_xy;
   int N_SMOD_z = scannerGeometry.n_smod_z;
   int N_CRY_xy = scannerGeometry.n_cry_xy;
   int N_CRY_z = scannerGeometry.n_cry_z;
   // int N_CRY_layers = scannerGeometry.n_cry_layers;
 
-  int ring = (Int_t)(gantry_id)*N_RSEC_z*N_MOD_z*N_SMOD_z*N_CRY_z
-           + (Int_t)(rsector_id/N_RSEC_xy)*N_MOD_z*N_SMOD_z*N_CRY_z
-           + (Int_t)(module_id/N_MOD_xy)*N_SMOD_z*N_CRY_z
-           + (Int_t)(submodule_id/N_SMOD_xy)*N_CRY_z
-           + (Int_t)(crystal_id/N_CRY_xy);
+  return (Int_t)((module_id*N_SMOD_xy*N_SMOD_z)
+                 + submodule_id*N_CRY_xy*N_CRY_z
+                 + crystal_id);
+}
 
-  int crystal = (Int_t)(crystal_id%N_CRY_xy)
-              + (Int_t)(submodule_id%N_SMOD_xy)*N_CRY_xy
-              + (Int_t)(module_id%N_MOD_xy)*N_SMOD_xy*N_CRY_xy
-              + (Int_t)(rsector_id%N_RSEC_xy)*N_MOD_xy*N_SMOD_xy*N_CRY_xy;
+int calculate_module_index(int gantry_id, int rsector_id, const ScannerGeometry& scannerGeometry)
+{
+  const int N_RSEC_xy = scannerGeometry.n_rsec_xy;
+  const int N_RSEC_z = scannerGeometry.n_rsec_z;
 
-  return crystal + (ring-rmin)*N_DET;
+  return (Int_t)(gantry_id)*N_RSEC_z*N_RSEC_xy + (Int_t)rsector_id;
 }
 
 //! return a cuboid volume
@@ -323,7 +321,6 @@ get_detector_module(ScannerGeometry& scannerGeometry)
   petsird::ReplicatedBoxSolidVolume rep_volume;
   {
     rep_volume.object = get_crystal(scannerGeometry);
-    int crystal_id = 0;
     for (int rep_mod_xy = 0; rep_mod_xy < scannerGeometry.n_mod_xy; ++rep_mod_xy)
         for (int rep_mod_z = 0; rep_mod_z < scannerGeometry.n_mod_z; ++rep_mod_z)
           for (int rep_smod_xy = 0; rep_smod_xy < scannerGeometry.n_smod_xy; ++rep_smod_xy)
@@ -340,15 +337,11 @@ get_detector_module(ScannerGeometry& scannerGeometry)
                                                                                + (rep_smod_z - scannerGeometry.n_smod_z / 2) * scannerGeometry.n_cry_z * scannerGeometry.detector_z_dim
                                                                                + (rep_cry_z - scannerGeometry.n_cry_z / 2) * scannerGeometry.detector_z_dim } } };
                       rep_volume.transforms.push_back(transform);
-                      //rep_volume.ids.push_back(rep_cry_layer + n_cry_layer * (rep_cry_xy + n_cry_xy * rep_cry_z));
-                      //rep_volume.ids.push_back(rep_cry_z + scannerGeometry.n_cry_z * (rep_cry_xy + scannerGeometry.n_cry_xy * rep_cry_layer));
-                      rep_volume.ids.push_back(crystal_id++);
                     }
   }
 
   petsird::DetectorModule detector_module;
-  detector_module.detecting_elements.push_back(rep_volume);
-  detector_module.detecting_element_ids.push_back(0);
+  detector_module.detecting_elements = rep_volume;
 
   return detector_module;
 }
@@ -361,7 +354,6 @@ get_scanner_geometry(ScannerGeometry& scannerGeometry)
   petsird::ReplicatedDetectorModule rep_module;
   {
     rep_module.object = get_detector_module(scannerGeometry);
-    int module_id = 0;
     std::vector<float> angles;
     for (int i = 0; i < scannerGeometry.n_rsec_xy; ++i)
       {
@@ -375,13 +367,11 @@ get_scanner_geometry(ScannerGeometry& scannerGeometry)
                                                     { -std::sin(angle), std::cos(angle), 0.F, 0.F},
                                                     { 0.F, 0.F, 1.F, (rep_rsec_z - scannerGeometry.n_rsec_z / 2) * scannerGeometry.n_mod_z * scannerGeometry.n_smod_z * scannerGeometry.n_cry_z * scannerGeometry.detector_z_dim} } };
 
-          rep_module.ids.push_back(module_id++);
           rep_module.transforms.push_back(transform);
         }
   }
   petsird::ScannerGeometry scanner_geometry;
   scanner_geometry.replicated_modules.push_back(rep_module);
-  scanner_geometry.ids.push_back(0);
   return scanner_geometry;
 }
 
@@ -393,30 +383,57 @@ get_scanner_info(ScannerGeometry& scannerGeometry)
   // int n_detectors = scannerGeometry.n_det;
   // int n_rings = scannerGeometry.n_rings;
   unsigned long NUMBER_OF_TOF_BINS = static_cast<unsigned long>(scannerGeometry.number_of_tof_bins);
-  unsigned long NUMBER_OF_ENERGY_BINS = static_cast<unsigned long>(scannerGeometry.number_of_energy_bins);
+  unsigned long NUMBER_OF_EVENT_ENERGY_BINS = static_cast<unsigned long>(scannerGeometry.number_of_energy_bins);
   float energy_LLD = scannerGeometry.energy_LLD;
   float energy_ULD =scannerGeometry.energy_ULD;
 
-  typedef yardl::NDArray<float, 1> FArray1D;
-  // TOF info (in mm)
-  FArray1D::shape_type tof_bin_edges_shape = { NUMBER_OF_TOF_BINS + 1 };
-  FArray1D tof_bin_edges(tof_bin_edges_shape);
-  for (std::size_t i = 0; i < tof_bin_edges.size(); ++i) {
-    tof_bin_edges[i] = (i - NUMBER_OF_TOF_BINS / 2.F) / NUMBER_OF_TOF_BINS * scannerGeometry.TxFOV_TOF;
-  }
-  FArray1D::shape_type energy_bin_edges_shape = { NUMBER_OF_ENERGY_BINS + 1 };
-  FArray1D energy_bin_edges(energy_bin_edges_shape);
-  for (std::size_t i = 0; i < energy_bin_edges.size(); ++i) {
-    energy_bin_edges[i] = energy_LLD + i * (energy_ULD - energy_LLD) / NUMBER_OF_ENERGY_BINS;
-  }
   petsird::ScannerInformation scanner_info;
-  scanner_info.scanner_geometry = get_scanner_geometry(scannerGeometry);
-  // scanner_info.detectors = detectors;
-  scanner_info.tof_bin_edges = tof_bin_edges;
-  scanner_info.tof_resolution = scannerGeometry.TOF_resolution*0.3; // conversion from psec to mm (e.g. 200ps TOF is equivalent to 60mm uncertainty)
-  scanner_info.energy_bin_edges = energy_bin_edges;
-  scanner_info.energy_resolution_at_511 = scannerGeometry.EnergyResolutionAt511;    // as fraction of 511 (e.g. 0.11F)
-  scanner_info.event_time_block_duration = scannerGeometry.LM_TimeBlockDuration; // ms
+  scanner_info.model_name = "PETSIRD_GATEROOT"; // TODO
+
+  const auto num_types_of_modules = 1;
+  // Pre-allocate various structures to have the correct size for num_types_of_modules
+  // (We will still have to set descent values into each of these.)
+  petsird_helpers::create::initialize_scanner_information_dimensions(scanner_info, num_types_of_modules,
+                                                                     /* allocate_detection_bin_efficiencies = */ false,
+                                                                     /* allocate_module_pair_efficiencies = */ false);
+
+  // TODO scanner_info.bulk_materials
+
+  // TOF and energy information
+  {
+    auto& all_tof_bin_edges = scanner_info.tof_bin_edges;
+    auto& all_tof_resolutions = scanner_info.tof_resolution;
+    auto& all_event_energy_bin_edges = scanner_info.event_energy_bin_edges;
+    auto& all_event_energy_resolutions = scanner_info.energy_resolution_at_511;
+
+    // only 1 type of module in the current scanner
+    assert(num_types_of_modules == 1);
+    const petsird::TypeOfModule type_of_module{ 0 };
+
+    typedef yardl::NDArray<float, 1> FArray1D;
+    // TOF info (in mm)
+    FArray1D tof_bin_edges_arr;
+    yardl::resize(tof_bin_edges_arr, { NUMBER_OF_TOF_BINS + 1 });
+    for (std::size_t i = 0; i < tof_bin_edges_arr.size(); ++i)
+      tof_bin_edges_arr[i] = (i - NUMBER_OF_TOF_BINS / 2.F) / NUMBER_OF_TOF_BINS * 2 * scannerGeometry.TxFOV_TOF;
+    const petsird::BinEdges tof_bin_edges{ tof_bin_edges_arr };
+    all_tof_bin_edges[type_of_module][type_of_module] = tof_bin_edges;
+
+    // TODO use speed-of-light here
+    all_tof_resolutions[type_of_module][type_of_module] = scannerGeometry.TOF_resolution*0.3; // conversion from psec to mm (e.g. 200ps TOF is equivalent to 60mm uncertainty)
+
+    FArray1D event_energy_bin_edges_arr;
+    yardl::resize(event_energy_bin_edges_arr, { NUMBER_OF_EVENT_ENERGY_BINS + 1 });
+    for (std::size_t i = 0; i < event_energy_bin_edges_arr.size(); ++i)
+      event_energy_bin_edges_arr[i] = energy_LLD + i * (energy_ULD - energy_LLD) / NUMBER_OF_EVENT_ENERGY_BINS;
+    petsird::BinEdges event_energy_bin_edges{ event_energy_bin_edges_arr };
+    all_event_energy_bin_edges[type_of_module] = event_energy_bin_edges;
+    all_event_energy_resolutions[type_of_module] = scannerGeometry.EnergyResolutionAt511;    // as fraction of 511 (e.g. 0.11F)
+  }
+
+  // TODO scanner_info.coincidence_policy = petsird::CoincidencePolicy::kRejectMultiples;
+  scanner_info.delayed_coincidences_are_stored = false;
+  scanner_info.triple_events_are_stored = false;
   return scanner_info;
 }
 
@@ -424,10 +441,13 @@ get_scanner_info(ScannerGeometry& scannerGeometry)
 
 uint32_t tofToIdx(double delta_time_psec, const petsird::ScannerInformation& scanner_info)
 {
+  constexpr petsird::TypeOfModule type_of_module{ 0 };
+  const auto& tof_bin_edges = scanner_info.tof_bin_edges[type_of_module][type_of_module].edges;
+
   float tofPos_mm = delta_time_psec * 0.15; //conversion from time difference (in psec) to spatial position in LOR (in mm) DT*C/2
-  for (size_t i = 0; i < scanner_info.tof_bin_edges.size() - 1; ++i)
+  for (size_t i = 0; i < tof_bin_edges.size() - 1; ++i)
   {
-    if (tofPos_mm >= scanner_info.tof_bin_edges[i] && tofPos_mm < scanner_info.tof_bin_edges[i+1])
+    if (tofPos_mm >= tof_bin_edges[i] && tofPos_mm < tof_bin_edges[i+1])
     {
       return static_cast<uint32_t>(i);
     }
@@ -440,9 +460,11 @@ uint32_t tofToIdx(double delta_time_psec, const petsird::ScannerInformation& sca
 
 uint32_t energyToIdx(float energy, const petsird::ScannerInformation& scanner_info)
 {
-  for (size_t i = 0; i < scanner_info.energy_bin_edges.size() - 1; ++i)
+  constexpr petsird::TypeOfModule type_of_module{ 0 };
+  const auto& energy_bin_edges = scanner_info.event_energy_bin_edges[type_of_module].edges;
+  for (size_t i = 0; i < energy_bin_edges.size() - 1; ++i)
   {
-    if (energy >= scanner_info.energy_bin_edges[i] && energy < scanner_info.energy_bin_edges[i+1])
+    if (energy >= energy_bin_edges[i] && energy < energy_bin_edges[i+1])
     {
       return static_cast<uint32_t>(i);
     }
@@ -450,6 +472,18 @@ uint32_t energyToIdx(float energy, const petsird::ScannerInformation& scanner_in
   std::stringstream ss;
   ss << "WARNING: Energy out of range: " << energy;
   throw std::runtime_error(ss.str());
+}
+
+petsird::Coordinate mean_position(const petsird::BoxShape& box_shape)
+{
+  petsird::Coordinate mean;
+  mean.c = {0, 0, 0};
+  for (auto& corner : box_shape.corners)
+    {
+      mean.c += corner.c;
+    }
+  mean.c /= box_shape.corners.size();
+  return mean;
 }
 
 int main(int argc, char** argv)
@@ -594,26 +628,22 @@ int main(int argc, char** argv)
 
   // Output PETSIRD
   petsird::Header header;
-  petsird::ScannerInformation scanner = get_scanner_info(scannerGeometry);
+  header.scanner = get_scanner_info(scannerGeometry);
+  auto& scanner = header.scanner;
 
   if (verbose) {
     // Print scanner information
     std::cout << "Scanner information:" << std::endl;
-    std::cout << "Number of TOF bins: " << scanner.NumberOfTOFBins() << std::endl;
-    std::cout << "Number of energy bins: " << scanner.NumberOfEnergyBins() << std::endl;
-    const auto& tof_bin_edges = scanner.tof_bin_edges;
-    std::cout << "TOF bin edges: " << tof_bin_edges << std::endl;
-    const auto& energy_bin_edges = scanner.energy_bin_edges;
-    std::cout << "Energy bin edges: " << energy_bin_edges << std::endl;
-    //for (auto d : scanner.detectors) {
-    //  std::cout << "    Detector " << d.id << ": (" << d.x << ", " << d.y << ", " << d.z << ")" << std::endl;
-    //}
+    constexpr petsird::TypeOfModule type_of_module{ 0 };
+    const auto& tof_bin_edges = header.scanner.tof_bin_edges[type_of_module][type_of_module];
+    const auto num_tof_bins = tof_bin_edges.NumberOfBins();
+    std::cout << "Number of TOF bins: " << num_tof_bins << std::endl;
+    std::cout << "TOF bin edges: " << tof_bin_edges.edges << std::endl;
+    const auto& event_energy_bin_edges = header.scanner.event_energy_bin_edges[type_of_module];
+    const auto num_event_energy_bins = event_energy_bin_edges.NumberOfBins();
+    std::cout << "Number of energy bins: " << num_event_energy_bins << std::endl;
+    std::cout << "Event energy bin edges: " << event_energy_bin_edges.edges << std::endl;
   }
-
-  petsird::ExamInformation exam;
-
-  header.exam = exam;
-  header.scanner = scanner;
 
   // Write PETSiRD file
   petsird::binary::PETSIRDWriter writer(petsird_file);
@@ -621,6 +651,8 @@ int main(int argc, char** argv)
 
   long current_time_block = -1;
   petsird::EventTimeBlock time_block;
+  const auto event_time_block_duration = scannerGeometry.LM_TimeBlockDuration; // ms
+  const petsird::TypeOfModule type_of_module{ 0 };
   unsigned long Counts_binned = 0;
   for (unsigned long long int i = 0 ; i < nentries ; i++)
   {
@@ -633,42 +665,60 @@ int main(int argc, char** argv)
     {
 	    if (comptonPhantom1 == 0 && comptonPhantom2 == 0) {
         petsird::CoincidenceEvent event;
-        event.detector_ids[0] = calculate_detector_id(gantryID1, rsectorID1, moduleID1, submoduleID1, crystalID1, scannerGeometry);
-        event.detector_ids[1] = calculate_detector_id(gantryID2, rsectorID2, moduleID2, submoduleID2, crystalID2, scannerGeometry);
+        petsird::ExpandedDetectionBin expanded_detection_bin;
+        expanded_detection_bin.module_index = calculate_module_index(gantryID1, rsectorID1, scannerGeometry);
+        expanded_detection_bin.element_index = calculate_element_index(moduleID1, submoduleID1, crystalID1, scannerGeometry);
+        expanded_detection_bin.energy_index = static_cast<uint32_t>(energyToIdx(1.0e3*energy1, scanner));
+        event.detection_bins[0] = petsird_helpers::make_detection_bin(header.scanner, type_of_module, expanded_detection_bin);
+        expanded_detection_bin.module_index = calculate_module_index(gantryID2, rsectorID2, scannerGeometry);
+        expanded_detection_bin.element_index = calculate_element_index(moduleID1, submoduleID1, crystalID1, scannerGeometry);
+        expanded_detection_bin.energy_index = static_cast<uint32_t>(energyToIdx(1.0e3*energy2, scanner));
+        event.detection_bins[1] = petsird_helpers::make_detection_bin(header.scanner, type_of_module, expanded_detection_bin);
         double dt_psec = 1.0e12f*(time1 - time2); //in psec
         if (abs(dt_psec) > scannerGeometry.TxFOV_TOF/0.3f) {
           continue;
         }
         event.tof_idx = static_cast<uint32_t>(tofToIdx(dt_psec, scanner));
-        event.energy_indices[0] = static_cast<uint32_t>(energyToIdx(1.0e3*energy1, scanner));
-        event.energy_indices[1] = static_cast<uint32_t>(energyToIdx(1.0e3*energy2, scanner));
 
         if (verbose && i%100000 == 0) {
           std::cout << "Event " << i << std::endl;
-          std::cout << "  detector_1_id: " << event.detector_ids[0] << std::endl;
-          std::cout << "  detector_2_id: " << event.detector_ids[1] << std::endl;
+          const auto expanded_detection_bin0
+            = petsird_helpers::expand_detection_bin(header.scanner, type_of_module, event.detection_bins[0]);
+          const auto expanded_detection_bin1
+            = petsird_helpers::expand_detection_bin(header.scanner, type_of_module, event.detection_bins[1]);
+          std::cout << "    "
+                    << "[ExpandedDetectionBin(module=" << expanded_detection_bin0.module_index << ", "
+                    << "el=" << expanded_detection_bin0.element_index << ", "
+                    << "energy_index=" << expanded_detection_bin0.energy_index
+                    << "), ExpandedDetectionBin(module=" << expanded_detection_bin1.module_index << ", "
+                    << "el=" << expanded_detection_bin1.element_index << ", "
+                    << "energy_index=" << expanded_detection_bin1.energy_index << ")]\n";
           std::cout << "  tof_idx: " << event.tof_idx << std::endl;
-          std::cout << "  energy_1_idx: " << event.energy_indices[0] << std::endl;
-          std::cout << "  energy_2_idx: " << event.energy_indices[1] << std::endl;
-          //std::cout << "  detector 1 position: " << scanner.detectors[event.detector_ids[0]].x << ", " << scanner.detectors[event.detector_ids[0]].y << ", " << scanner.detectors[event.detector_ids[0]].z << std::endl;
-          //std::cout << "  GlobalPosition 1: " << globalPosX1 << ", " << globalPosY1 << ", " << globalPosZ1 << std::endl;
+          const auto box_shape0 = petsird_helpers::geometry::get_detecting_box(header.scanner, type_of_module, expanded_detection_bin0);
+          const auto mean_pos0 = mean_position(box_shape0);
+          const auto box_shape1 = petsird_helpers::geometry::get_detecting_box(header.scanner, type_of_module, expanded_detection_bin1);
+          const auto mean_pos1 = mean_position(box_shape1);
+          std::cout << "  pos 1          : " << mean_pos0.c[0] << ", " << mean_pos0.c[1] << ", " << mean_pos0.c[2] << "\n";
+          std::cout << "  pos 2          : " << mean_pos1.c[0] << ", " << mean_pos1.c[1] << ", " << mean_pos1.c[2] << "\n";
+
+          std::cout << "  GlobalPosition 1: " << globalPosX1 << ", " << globalPosY1 << ", " << globalPosZ1 << std::endl;
           //float distance_1 = std::sqrt(std::pow(scanner.detectors[event.detector_ids[0]].x-globalPosX1, 2) + std::pow(scanner.detectors[event.detector_ids[0]].y-globalPosY1, 2) + std::pow(scanner.detectors[event.detector_ids[0]].z-globalPosZ1, 2));
           //std::cout << "  Distance 1: " << distance_1 << std::endl;
-          //std::cout << "  detector 2 position: " << scanner.detectors[event.detector_ids[1]].x << ", " << scanner.detectors[event.detector_ids[1]].y << ", " << scanner.detectors[event.detector_ids[1]].z << std::endl;
-          //std::cout << "  GlobalPosition 2: " << globalPosX2 << ", " << globalPosY2 << ", " << globalPosZ2 << std::endl;
+          std::cout << "  GlobalPosition 2: " << globalPosX2 << ", " << globalPosY2 << ", " << globalPosZ2 << std::endl;
           //float distance_2 = std::sqrt(std::pow(scanner.detectors[event.detector_ids[1]].x-globalPosX2, 2) + std::pow(scanner.detectors[event.detector_ids[1]].y-globalPosY2, 2) + std::pow(scanner.detectors[event.detector_ids[1]].z-globalPosZ2, 2));
           //std::cout << "  Distance 2: " << distance_2 << std::endl;
         }
-        long this_time_block = static_cast<long>(time1*1.0e3 / scanner.event_time_block_duration);
+        long this_time_block = static_cast<long>(time1*1.0e3 / event_time_block_duration);
         if (this_time_block != current_time_block) {
           if (current_time_block != -1) {
             writer.WriteTimeBlocks(time_block);
           }
           current_time_block = this_time_block;
           time_block = petsird::EventTimeBlock{};
-          time_block.start = time1*1.0e3;
+          time_block.time_interval.start = time1*1.0e3;
+          time_block.time_interval.stop = time1*1.0e3 + event_time_block_duration;
         }
-        time_block.prompt_events.push_back(event);
+        time_block.prompt_events[type_of_module][type_of_module].push_back(event);
         Counts_binned++;
         Trues++;
       } else {

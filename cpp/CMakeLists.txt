@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.12.0) # older would work, but could give warnings on policy CMP0074
-project(root_to_petsird VERSION 0.2.0)
+project(root_to_petsird VERSION 0.3.0)
 
 set(CMAKE_CXX_STANDARD 17)
 
@@ -24,6 +24,7 @@ add_executable(root_to_petsird main.cpp)
 target_include_directories(root_to_petsird PUBLIC ${PETSIRD_dir})
 # needed for helpers
 target_include_directories(root_to_petsird PUBLIC ${PETSIRD_dir}/..)
+target_include_directories(root_to_petsird PUBLIC ${PETSIRD_dir}/../helpers/include)
 target_link_libraries(root_to_petsird PUBLIC petsird_generated)
 target_link_libraries(root_to_petsird PUBLIC ROOT::Core ROOT::Imt ROOT::RIO ROOT::Net ROOT::Hist ROOT::Graf ROOT::Graf3d ROOT::Gpad ROOT::Tree ROOT::TreePlayer ROOT::Rint ROOT::Postscript ROOT::Matrix ROOT::Physics ROOT::MathCore ROOT::Thread ROOT::MultiProc ROOT::ROOTDataFrame)
 install(TARGETS root_to_petsird DESTINATION bin)
