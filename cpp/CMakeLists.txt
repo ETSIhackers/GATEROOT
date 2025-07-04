@@ -19,12 +19,13 @@ endif()
 set(PETSIRD_dir ../PETSIRD/cpp/generated)
 add_subdirectory(${PETSIRD_dir} PETSIRD_generated)
 
-find_package(ROOT REQUIRED COMPONENTS Core Imt RIO Net Hist Graf Graf3d Gpad Tree TreePlayer Rint Postscript Matrix Physics MathCore Thread MultiProc ROOTDataFrame)
+find_package(ROOT REQUIRED COMPONENTS Tree)
+
 add_executable(root_to_petsird main.cpp)
 target_include_directories(root_to_petsird PUBLIC ${PETSIRD_dir})
 # needed for helpers
 target_include_directories(root_to_petsird PUBLIC ${PETSIRD_dir}/..)
 target_include_directories(root_to_petsird PUBLIC ${PETSIRD_dir}/../helpers/include)
 target_link_libraries(root_to_petsird PUBLIC petsird_generated)
-target_link_libraries(root_to_petsird PUBLIC ROOT::Core ROOT::Imt ROOT::RIO ROOT::Net ROOT::Hist ROOT::Graf ROOT::Graf3d ROOT::Gpad ROOT::Tree ROOT::TreePlayer ROOT::Rint ROOT::Postscript ROOT::Matrix ROOT::Physics ROOT::MathCore ROOT::Thread ROOT::MultiProc ROOT::ROOTDataFrame)
+target_link_libraries(root_to_petsird PUBLIC ROOT::Tree)
 install(TARGETS root_to_petsird DESTINATION bin)

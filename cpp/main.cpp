@@ -67,31 +67,11 @@
 #include <fstream>
 #include <string>
 #include <vector>
-#include <math.h>
-#include <stdlib.h>
-#include <stdio.h>
 #include "TROOT.h"
-#include "TSystem.h"
 #include "TChain.h"
-#include "TH2D.h"
-#include "TDirectory.h"
-#include "TList.h"
-#include "Rtypes.h"
-#include "TChainElement.h"
-#include "TTree.h"
-#include "TFile.h"
-#include "TStyle.h"
-#include "TH2.h"
-#include "TH2F.h"
-#include "TCanvas.h"
-#include "TRandom.h"
-#include <time.h>
 #include <cmath>
 
 #include <nlohmann/json.hpp>
-
-#include <xtensor/xview.hpp>
-#include <xtensor/xio.hpp>
 
 // PETSIRD Includes
 #include "protocols.h"
