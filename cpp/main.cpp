@@ -379,6 +379,9 @@ get_scanner_info(ScannerGeometry& scannerGeometry)
 
   // TODO scanner_info.bulk_materials
 
+  // geometry
+  scanner_info.scanner_geometry = get_scanner_geometry(scannerGeometry);
+
   // TOF and energy information
   {
     auto& all_tof_bin_edges = scanner_info.tof_bin_edges;
@@ -464,6 +467,16 @@ petsird::Coordinate mean_position(const petsird::BoxShape& box_shape)
     }
   mean.c /= box_shape.corners.size();
   return mean;
+}
+
+auto create_new_time_block(const petsird::ScannerInformation& scanner)
+{
+  const auto num_module_types = scanner.scanner_geometry.replicated_modules.size();
+  petsird::EventTimeBlock time_block;
+  // allocate lists for prompt_events
+  // warning: would have to do the same for delayeds once we store them
+  time_block.prompt_events = petsird_helpers::create::construct_2D_nested_vector<petsird::ListOfCoincidenceEvents>(num_module_types, num_module_types);
+  return time_block;
 }
 
 int main(int argc, char** argv)
@@ -630,7 +643,8 @@ int main(int argc, char** argv)
   writer.WriteHeader(header);
 
   long current_time_block = -1;
-  petsird::EventTimeBlock time_block;
+  auto time_block = create_new_time_block(header.scanner);
+
   const auto event_time_block_duration = scannerGeometry.LM_TimeBlockDuration; // ms
   const petsird::TypeOfModule type_of_module{ 0 };
   unsigned long Counts_binned = 0;
@@ -694,7 +708,7 @@ int main(int argc, char** argv)
             writer.WriteTimeBlocks(time_block);
           }
           current_time_block = this_time_block;
-          time_block = petsird::EventTimeBlock{};
+          time_block = create_new_time_block(header.scanner);
           time_block.time_interval.start = time1*1.0e3;
           time_block.time_interval.stop = time1*1.0e3 + event_time_block_duration;
         }
