@@ -263,8 +263,8 @@ int calculate_element_index(int module_id, int submodule_id, int crystal_id, con
   int N_CRY_z = scannerGeometry.n_cry_z;
   // int N_CRY_layers = scannerGeometry.n_cry_layers;
 
-  return (Int_t)((module_id*N_SMOD_xy*N_SMOD_z)
-                 + submodule_id*N_CRY_xy*N_CRY_z
+  return (Int_t)(((module_id*N_SMOD_xy*N_SMOD_z)
+                  + submodule_id)*N_CRY_xy*N_CRY_z
                  + crystal_id);
 }
 
