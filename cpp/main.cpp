@@ -7,58 +7,25 @@
 //  * regarding  this  software system or assume any liability for its  *
 //  * use.                                                              *
 //  *                                                                   *
-//  * This  code  implementation is the  intellectual property  of the  *
-//  * OpenGATE collaboration.                                           *
 //  * By copying,  distributing  or modifying the Program (or any work  *
 //  * based  on  the Program)  you indicate  your  acceptance of  this  *
 //  * statement, and all its terms.                                     *
 //  *********************************************************************
 //
 //######################################################################################
-//# Authors   : Nicolas A Karakatsanis,                                                #
+//# Authors   : Nicolas A Karakatsanis, Kris Thielemans                                #
 //#                                                                                    #
-//# Date  03-NOV-2024                                                                  #
+//# Date  03-NOV-2024 - July 2025                                                      #
 //#                                                                                    #
-//# Objective : To read the coincidences TTree from the .root file, and generates the  #
-//#             corresponding Michelogram and Projection files.                        #
+//# Objective : To read the coincidences TTree from the .root file, and generate  the  #
+//#             corresponding PETSIRD file.                                            #
 //#                                                                                    #
 //# Input     : Monte Carlo data from GATE                                             #
 //#                                                                                    #
-//# Output    : 1 Michelogram  files according to various binning definitions          #
-//#           : 2 Projection  files according to various binning definitions           #
+//# Output    : PETSIRD file (tested with v0.7)                                        #
 //#                                                                                    #
 //######################################################################################
 //#                                                                                    #
-//# This file is last modified on Nov 03, 2024 by: N. Karakatsanis                     #
-//#                                                                                    #
-//# The data are input from a root file produced by Gate simulating extended FOV of    #
-//# mCT scanner. This scanner will have 5xFOV thus the root file contains information  #
-//# on every gantry. In this case there are 5 gantries with gantryID (0 -> 4).         #
-//# The ring numbers are defined based on the gantryID.                                #
-//#                                                                                    #
-//# The virtual rings between the blocks are taken into consideration here.            #
-//#                                                                                    #
-//# The central FOV is taken into consideration                                        #
-//# The maximum and minimum rings should be specified if the user wishes to change     #
-//# the number or the order of gantries.                                               #
-//#                                                                                    #
-//#                                                                                    #
-//#                                                                                    #
-//#                                                                                    #
-//#  NEW WAY TO RUN:                                                                   #
-//#                                                                                    #
-//# HOW TO COMPILE:                                                                    #
-//# 1) Compile using this command line in the terminal:                                #
-//#       g++ (name of file) `root-config --cflags --libs`                             #
-//#                                                                                    #
-//# HOW TO RUN:                                                                        #
-//# 1) After compiling the code type the following command line:                       #
-//#       ./a.out 'directory name of root files' 'output file name' 'yes/no'           #
-//#                                                                                    #
-//# NOTE: 1) To drop the odd ring put 'yes' as an argument when running, otherwise the #
-//# rings will not be droped.                                                          #
-//#       2) You will be prompted to enter the minimum ring number                     #
-//######################################################################################
 
 
 
