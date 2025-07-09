@@ -301,12 +301,12 @@ get_detector_module(ScannerGeometry& scannerGeometry)
   petsird::ReplicatedBoxSolidVolume rep_volume;
   {
     rep_volume.object = get_crystal(scannerGeometry);
-    for (int rep_mod_xy = 0; rep_mod_xy < scannerGeometry.n_mod_xy; ++rep_mod_xy)
-        for (int rep_mod_z = 0; rep_mod_z < scannerGeometry.n_mod_z; ++rep_mod_z)
+    for (int rep_mod_z = 0; rep_mod_z < scannerGeometry.n_mod_z; ++rep_mod_z)
+      for (int rep_mod_xy = 0; rep_mod_xy < scannerGeometry.n_mod_xy; ++rep_mod_xy)
+        for (int rep_smod_z = 0; rep_smod_z < scannerGeometry.n_smod_z; ++rep_smod_z)
           for (int rep_smod_xy = 0; rep_smod_xy < scannerGeometry.n_smod_xy; ++rep_smod_xy)
-            for (int rep_smod_z = 0; rep_smod_z < scannerGeometry.n_smod_z; ++rep_smod_z)
+            for (int rep_cry_z = 0; rep_cry_z < scannerGeometry.n_cry_z; ++rep_cry_z)
               for (int rep_cry_xy = 0; rep_cry_xy < scannerGeometry.n_cry_xy; ++rep_cry_xy)
-                for (int rep_cry_z = 0; rep_cry_z < scannerGeometry.n_cry_z; ++rep_cry_z)
                   for (int rep_cry_layer = 0; rep_cry_layer < scannerGeometry.n_cry_layers; ++rep_cry_layer)
                     {
                       petsird::RigidTransformation transform{ { { 1.0, 0.0, 0.0, scannerGeometry.radius + rep_cry_layer * scannerGeometry.detector_x_dim },
@@ -665,7 +665,7 @@ int main(int argc, char** argv)
         expanded_detection_bin.energy_index = static_cast<uint32_t>(energyToIdx(1.0e3*energy1, scanner));
         event.detection_bins[0] = petsird_helpers::make_detection_bin(header.scanner, type_of_module, expanded_detection_bin);
         expanded_detection_bin.module_index = calculate_module_index(gantryID2, rsectorID2, scannerGeometry);
-        expanded_detection_bin.element_index = calculate_element_index(moduleID1, submoduleID1, crystalID1, scannerGeometry);
+        expanded_detection_bin.element_index = calculate_element_index(moduleID2, submoduleID2, crystalID2, scannerGeometry);
         expanded_detection_bin.energy_index = static_cast<uint32_t>(energyToIdx(1.0e3*energy2, scanner));
         event.detection_bins[1] = petsird_helpers::make_detection_bin(header.scanner, type_of_module, expanded_detection_bin);
         double dt_psec = 1.0e12f*(time1 - time2); //in psec
@@ -688,6 +688,10 @@ int main(int argc, char** argv)
                     << "el=" << expanded_detection_bin1.element_index << ", "
                     << "energy_index=" << expanded_detection_bin1.energy_index << ")]\n";
           std::cout << "  tof_idx: " << event.tof_idx << std::endl;
+          std::cout << "gantryID1=" << gantryID1 << ", rsectorID1=" << rsectorID1
+                    << ", moduleID1=" << moduleID1 << ", submoduleID1=" << submoduleID1 << ", crystalID1=" << crystalID1 << '\n';
+          std::cout << "gantryID2=" << gantryID2 << ", rsectorID2=" << rsectorID2
+                    << ", moduleID2=" << moduleID2 << ", submoduleID2=" << submoduleID2 << ", crystalID2=" << crystalID2 << '\n';
           const auto box_shape0 = petsird_helpers::geometry::get_detecting_box(header.scanner, type_of_module, expanded_detection_bin0);
           const auto mean_pos0 = mean_position(box_shape0);
           const auto box_shape1 = petsird_helpers::geometry::get_detecting_box(header.scanner, type_of_module, expanded_detection_bin1);
