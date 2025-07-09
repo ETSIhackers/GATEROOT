@@ -700,11 +700,11 @@ int main(int argc, char** argv)
           std::cout << "  pos 2          : " << mean_pos1.c[0] << ", " << mean_pos1.c[1] << ", " << mean_pos1.c[2] << "\n";
 
           std::cout << "  GlobalPosition 1: " << globalPosX1 << ", " << globalPosY1 << ", " << globalPosZ1 << std::endl;
-          //float distance_1 = std::sqrt(std::pow(scanner.detectors[event.detector_ids[0]].x-globalPosX1, 2) + std::pow(scanner.detectors[event.detector_ids[0]].y-globalPosY1, 2) + std::pow(scanner.detectors[event.detector_ids[0]].z-globalPosZ1, 2));
-          //std::cout << "  Distance 1: " << distance_1 << std::endl;
+          float distance_1 = std::sqrt(std::pow(mean_pos0.c[0]-globalPosX1, 2) + std::pow(mean_pos0.c[1]+globalPosY1, 2) + std::pow(mean_pos0.c[2]-globalPosZ1, 2));
+          std::cout << "  Distance 1: " << distance_1 << std::endl;
           std::cout << "  GlobalPosition 2: " << globalPosX2 << ", " << globalPosY2 << ", " << globalPosZ2 << std::endl;
-          //float distance_2 = std::sqrt(std::pow(scanner.detectors[event.detector_ids[1]].x-globalPosX2, 2) + std::pow(scanner.detectors[event.detector_ids[1]].y-globalPosY2, 2) + std::pow(scanner.detectors[event.detector_ids[1]].z-globalPosZ2, 2));
-          //std::cout << "  Distance 2: " << distance_2 << std::endl;
+          float distance_2 = std::sqrt(std::pow(mean_pos1.c[0]-globalPosX2, 2) + std::pow(mean_pos1.c[1]+globalPosY2, 2) + std::pow(mean_pos1.c[2]-globalPosZ2, 2));
+          std::cout << "  Distance 2: " << distance_2 << std::endl;
         }
         long this_time_block = static_cast<long>(time1*1.0e3 / event_time_block_duration);
         if (this_time_block != current_time_block) {
