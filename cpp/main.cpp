@@ -100,7 +100,7 @@
 
 using namespace std ;
 
-//#include "petsird_helpers.h"
+#include "petsird_helpers.h"
 
 struct ScannerGeometry
 {
@@ -270,10 +270,10 @@ void usage()
   std::cout << "  -h, --help                                  Print this help message" << std::endl;
 }
 
-int calculate_detector_id(int gantry_id, int rsector_id, int module_id, int submodule_id, int crystal_id, ScannerGeometry& scannerGeometry, int rmin = 0)
+int calculate_detector_id(int gantry_id, int rsector_id, int module_id, int submodule_id, int crystal_id, int layer_id, ScannerGeometry& scannerGeometry)
 {
   // In code below replace N_RINGS with scannerGeometry.n_rings, etc.
-  int N_DET = scannerGeometry.n_det;
+  //int N_DET = scannerGeometry.n_det;
   int N_RSEC_xy = scannerGeometry.n_rsec_xy;
   int N_RSEC_z = scannerGeometry.n_rsec_z;
   int N_MOD_xy = scannerGeometry.n_mod_xy;
@@ -282,39 +282,100 @@ int calculate_detector_id(int gantry_id, int rsector_id, int module_id, int subm
   int N_SMOD_z = scannerGeometry.n_smod_z;
   int N_CRY_xy = scannerGeometry.n_cry_xy;
   int N_CRY_z = scannerGeometry.n_cry_z;
-  // int N_CRY_layers = scannerGeometry.n_cry_layers;
+  int N_CRY_layers = scannerGeometry.n_cry_layers;
 
-  int ring = (Int_t)(gantry_id)*N_RSEC_z*N_MOD_z*N_SMOD_z*N_CRY_z
-           + (Int_t)(rsector_id/N_RSEC_xy)*N_MOD_z*N_SMOD_z*N_CRY_z
-           + (Int_t)(module_id/N_MOD_xy)*N_SMOD_z*N_CRY_z
-           + (Int_t)(submodule_id/N_SMOD_xy)*N_CRY_z
-           + (Int_t)(crystal_id/N_CRY_xy);
+  //int ring = (Int_t)(gantry_id)*N_RSEC_z*N_MOD_z*N_SMOD_z*N_CRY_z
+  //         + (Int_t)(rsector_id/N_RSEC_xy)*N_MOD_z*N_SMOD_z*N_CRY_z
+  //         + (Int_t)(module_id/N_MOD_xy)*N_SMOD_z*N_CRY_z
+  //         + (Int_t)(submodule_id/N_SMOD_xy)*N_CRY_z
+  //         + (Int_t)(crystal_id/N_CRY_xy);
 
-  int crystal = (Int_t)(crystal_id%N_CRY_xy)
-              + (Int_t)(submodule_id%N_SMOD_xy)*N_CRY_xy
-              + (Int_t)(module_id%N_MOD_xy)*N_SMOD_xy*N_CRY_xy
-              + (Int_t)(rsector_id%N_RSEC_xy)*N_MOD_xy*N_SMOD_xy*N_CRY_xy;
+  //int crystal = (Int_t)(crystal_id%N_CRY_xy)
+  //            + (Int_t)(submodule_id%N_SMOD_xy)*N_CRY_xy
+  //            + (Int_t)(module_id%N_MOD_xy)*N_SMOD_xy*N_CRY_xy
+  //            + (Int_t)(rsector_id%N_RSEC_xy)*N_MOD_xy*N_SMOD_xy*N_CRY_xy;
 
-  return crystal + (ring-rmin)*N_DET;
+  int module = (Int_t)(rsector_id/N_RSEC_xy + (rsector_id%N_RSEC_xy)*N_RSEC_z)
+             + (Int_t)(gantry_id)*N_RSEC_xy*N_RSEC_z;
+
+  int element = (Int_t)(layer_id)
+              + (Int_t)(crystal_id/N_CRY_xy + (crystal_id%N_CRY_xy)*N_CRY_z)*N_CRY_layers
+              + (Int_t)(submodule_id/N_SMOD_xy + (submodule_id%N_SMOD_xy)*N_SMOD_z)*N_CRY_layers*N_CRY_xy*N_CRY_z
+              + (Int_t)(module_id/N_MOD_xy + (module_id%N_MOD_xy)*N_MOD_z)*N_CRY_layers*N_CRY_xy*N_CRY_z*N_SMOD_xy*N_SMOD_z;
+
+  //return crystal + ring*N_RSEC_xy*N_MOD_xy*N_SMOD_xy*N_CRY_xy;
+  return element + module*N_CRY_layers*N_CRY_xy*N_CRY_z*N_SMOD_xy*N_SMOD_z*N_MOD_xy*N_MOD_z;
+  //return module + element*N_RSEC_xy*N_RSEC_z;
+}
+
+inline std::vector<petsird_helpers::ModuleAndElement>
+calculate_module_and_element(int gantry_id, int rsector_id, int module_id, int submodule_id, int crystal_id, int layer_id, ScannerGeometry& scannerGeometry)
+{
+  // In code below replace N_RINGS with scannerGeometry.n_rings, etc.
+  //int N_DET = scannerGeometry.n_det;
+  int N_RSEC_xy = scannerGeometry.n_rsec_xy;
+  int N_RSEC_z = scannerGeometry.n_rsec_z;
+  int N_MOD_xy = scannerGeometry.n_mod_xy;
+  int N_MOD_z = scannerGeometry.n_mod_z;
+  int N_SMOD_xy = scannerGeometry.n_smod_xy;
+  int N_SMOD_z = scannerGeometry.n_smod_z;
+  int N_CRY_xy = scannerGeometry.n_cry_xy;
+  int N_CRY_z = scannerGeometry.n_cry_z;
+  int N_CRY_layers = scannerGeometry.n_cry_layers;
+
+  uint module = (Int_t)(rsector_id/N_RSEC_xy + (rsector_id%N_RSEC_xy)*N_RSEC_z)
+             + (Int_t)(gantry_id)*N_RSEC_xy*N_RSEC_z;
+
+  uint element = (Int_t)(layer_id)
+              + (Int_t)(crystal_id/N_CRY_xy + (crystal_id%N_CRY_xy)*N_CRY_z)*N_CRY_layers
+              + (Int_t)(submodule_id/N_SMOD_xy + (submodule_id%N_SMOD_xy)*N_SMOD_z)*N_CRY_layers*N_CRY_xy*N_CRY_z
+              + (Int_t)(module_id/N_MOD_xy + (module_id%N_MOD_xy)*N_MOD_z)*N_CRY_layers*N_CRY_xy*N_CRY_z*N_SMOD_xy*N_SMOD_z;
+
+  std::vector<petsird_helpers::ModuleAndElement> module_and_element;
+  module_and_element.push_back({ module, element });
+  return module_and_element;
 }
 
 //! return a cuboid volume
 petsird::BoxSolidVolume
 get_crystal(ScannerGeometry& scannerGeometry)
 {
+  /* //shift +half_crystal_dim in y and z
   using petsird::Coordinate;
-  petsird::BoxShape crystal_shape{ Coordinate{ { 0, 0, 0 } },
-                                   Coordinate{ { 0, 0, scannerGeometry.detector_z_dim } },
-                                   Coordinate{ { 0, scannerGeometry.detector_y_dim, scannerGeometry.detector_z_dim } },
-                                   Coordinate{ { 0, scannerGeometry.detector_y_dim, 0 } },
-                                   Coordinate{ { scannerGeometry.detector_x_dim, 0, 0 } },
-                                   Coordinate{ { scannerGeometry.detector_x_dim, 0, scannerGeometry.detector_z_dim } },
-                                   Coordinate{ { scannerGeometry.detector_x_dim, scannerGeometry.detector_y_dim, scannerGeometry.detector_z_dim } },
-                                   Coordinate{ { scannerGeometry.detector_x_dim, scannerGeometry.detector_y_dim, 0 } } };
-
+  petsird::BoxShape crystal_shape{ Coordinate{ { -scannerGeometry.detector_x_dim/2, 0, 0 } },
+                                   Coordinate{ { -scannerGeometry.detector_x_dim/2, 0, scannerGeometry.detector_z_dim } },
+                                   Coordinate{ { -scannerGeometry.detector_x_dim/2, scannerGeometry.detector_y_dim, scannerGeometry.detector_z_dim } },
+                                   Coordinate{ { -scannerGeometry.detector_x_dim/2, scannerGeometry.detector_y_dim, 0 } },
+                                   Coordinate{ { scannerGeometry.detector_x_dim/2, 0, 0 } },
+                                   Coordinate{ { scannerGeometry.detector_x_dim/2, 0, scannerGeometry.detector_z_dim } },
+                                   Coordinate{ { scannerGeometry.detector_x_dim/2, scannerGeometry.detector_y_dim, scannerGeometry.detector_z_dim } },
+                                   Coordinate{ { scannerGeometry.detector_x_dim/2, scannerGeometry.detector_y_dim, 0 } } };
+  */
+ //shift 0 in y and z
+ using petsird::Coordinate;
+  petsird::BoxShape crystal_shape{ Coordinate{ { -scannerGeometry.detector_x_dim/2, -scannerGeometry.detector_y_dim/2, -scannerGeometry.detector_z_dim/2 } },
+                                   Coordinate{ { -scannerGeometry.detector_x_dim/2, -scannerGeometry.detector_y_dim/2, scannerGeometry.detector_z_dim/2 } },
+                                   Coordinate{ { -scannerGeometry.detector_x_dim/2, scannerGeometry.detector_y_dim/2, scannerGeometry.detector_z_dim/2 } },
+                                   Coordinate{ { -scannerGeometry.detector_x_dim/2, scannerGeometry.detector_y_dim/2, -scannerGeometry.detector_z_dim/2 } },
+                                   Coordinate{ { scannerGeometry.detector_x_dim/2, -scannerGeometry.detector_y_dim/2, -scannerGeometry.detector_z_dim/2 } },
+                                   Coordinate{ { scannerGeometry.detector_x_dim/2, -scannerGeometry.detector_y_dim/2, scannerGeometry.detector_z_dim/2 } },
+                                   Coordinate{ { scannerGeometry.detector_x_dim/2, scannerGeometry.detector_y_dim/2, scannerGeometry.detector_z_dim/2 } },
+                                   Coordinate{ { scannerGeometry.detector_x_dim/2, scannerGeometry.detector_y_dim/2, -scannerGeometry.detector_z_dim/2 } } };
+  /*  //shift -half_crystal_dim in y and z
+  using petsird::Coordinate;
+  petsird::BoxShape crystal_shape{ Coordinate{ { -scannerGeometry.detector_x_dim/2, -scannerGeometry.detector_y_dim, -scannerGeometry.detector_z_dim } },
+                                   Coordinate{ { -scannerGeometry.detector_x_dim/2, -scannerGeometry.detector_y_dim, 0 } },
+                                   Coordinate{ { -scannerGeometry.detector_x_dim/2, 0, 0 } },
+                                   Coordinate{ { -scannerGeometry.detector_x_dim/2, 0, -scannerGeometry.detector_z_dim } },
+                                   Coordinate{ { scannerGeometry.detector_x_dim/2, -scannerGeometry.detector_y_dim, -scannerGeometry.detector_z_dim } },
+                                   Coordinate{ { scannerGeometry.detector_x_dim/2, -scannerGeometry.detector_y_dim, 0 } },
+                                   Coordinate{ { scannerGeometry.detector_x_dim/2, 0, 0 } },
+                                   Coordinate{ { scannerGeometry.detector_x_dim/2, 0, -scannerGeometry.detector_z_dim } } };
+  */
   petsird::BoxSolidVolume crystal{ crystal_shape, /* material_id */ 1 };
   return crystal;
 }
+
 
 //! return a module of NUM_CRYSTALS_PER_MODULE cuboids
 petsird::DetectorModule
@@ -332,17 +393,17 @@ get_detector_module(ScannerGeometry& scannerGeometry)
                 for (int rep_cry_z = 0; rep_cry_z < scannerGeometry.n_cry_z; ++rep_cry_z)
                   for (int rep_cry_layer = 0; rep_cry_layer < scannerGeometry.n_cry_layers; ++rep_cry_layer)
                     {
-                      petsird::RigidTransformation transform{ { { 1.0, 0.0, 0.0, scannerGeometry.radius + rep_cry_layer * scannerGeometry.detector_x_dim },
-                                                                { 0.0, 1.0, 0.0, (rep_mod_xy - scannerGeometry.n_mod_xy / 2) * scannerGeometry.n_smod_xy * scannerGeometry.n_cry_xy * scannerGeometry.detector_y_dim
-                                                                               + (rep_smod_xy - scannerGeometry.n_smod_xy / 2) * scannerGeometry.n_cry_xy * scannerGeometry.detector_y_dim
-                                                                               + (rep_cry_xy - scannerGeometry.n_cry_xy / 2) * scannerGeometry.detector_y_dim  },
-                                                                { 0.0, 0.0, 1.0, (rep_mod_z - scannerGeometry.n_mod_z / 2) * scannerGeometry.n_smod_z * scannerGeometry.n_cry_z * scannerGeometry.detector_z_dim
-                                                                               + (rep_smod_z - scannerGeometry.n_smod_z / 2) * scannerGeometry.n_cry_z * scannerGeometry.detector_z_dim
-                                                                               + (rep_cry_z - scannerGeometry.n_cry_z / 2) * scannerGeometry.detector_z_dim } } };
+                      petsird::RigidTransformation transform{ { { 1.F, 0.F, 0.F, scannerGeometry.radius + rep_cry_layer * scannerGeometry.detector_x_dim + scannerGeometry.detector_x_dim/2 },
+                                                                { 0.F, 1.F, 0.F, (rep_mod_xy - scannerGeometry.n_mod_xy / 2 + ((scannerGeometry.n_mod_xy - 1) % 2 ) * 0.5F) * scannerGeometry.n_smod_xy * scannerGeometry.n_cry_xy * scannerGeometry.detector_y_dim
+                                                                               + (rep_smod_xy - scannerGeometry.n_smod_xy / 2 + ((scannerGeometry.n_smod_xy - 1) % 2 ) * 0.5F) * scannerGeometry.n_cry_xy * scannerGeometry.detector_y_dim
+                                                                               + (rep_cry_xy - scannerGeometry.n_cry_xy / 2 + ((scannerGeometry.n_cry_xy - 1) % 2 ) * 0.5F) * scannerGeometry.detector_y_dim },
+                                                                { 0.F, 0.F, 1.F, (rep_mod_z - scannerGeometry.n_mod_z / 2 + ((scannerGeometry.n_mod_z - 1) % 2 ) * 0.5F) * scannerGeometry.n_smod_z * scannerGeometry.n_cry_z * scannerGeometry.detector_z_dim
+                                                                               + (rep_smod_z - scannerGeometry.n_smod_z / 2 + ((scannerGeometry.n_smod_z - 1) % 2 ) * 0.5F) * scannerGeometry.n_cry_z * scannerGeometry.detector_z_dim
+                                                                               + (rep_cry_z - scannerGeometry.n_cry_z / 2 + ((scannerGeometry.n_cry_z - 1) % 2 ) * 0.5F) * scannerGeometry.detector_z_dim } } };
+                      rep_volume.ids.push_back(crystal_id++);
                       rep_volume.transforms.push_back(transform);
                       //rep_volume.ids.push_back(rep_cry_layer + n_cry_layer * (rep_cry_xy + n_cry_xy * rep_cry_z));
                       //rep_volume.ids.push_back(rep_cry_z + scannerGeometry.n_cry_z * (rep_cry_xy + scannerGeometry.n_cry_xy * rep_cry_layer));
-                      rep_volume.ids.push_back(crystal_id++);
                     }
   }
 
@@ -371,9 +432,9 @@ get_scanner_geometry(ScannerGeometry& scannerGeometry)
     for (auto angle : angles)
       for (int rep_rsec_z = 0; rep_rsec_z < scannerGeometry.n_rsec_z; ++rep_rsec_z)
         {
-          petsird::RigidTransformation transform{ { { std::cos(angle), std::sin(angle), 0.F, 0.F },
-                                                    { -std::sin(angle), std::cos(angle), 0.F, 0.F},
-                                                    { 0.F, 0.F, 1.F, (rep_rsec_z - scannerGeometry.n_rsec_z / 2) * scannerGeometry.n_mod_z * scannerGeometry.n_smod_z * scannerGeometry.n_cry_z * scannerGeometry.detector_z_dim} } };
+          petsird::RigidTransformation transform{ { { std::cos(angle), -std::sin(angle), 0.F, 0.F },
+                                                    { std::sin(angle), std::cos(angle), 0.F, 0.F},
+                                                    { 0.F, 0.F, 1.F, (rep_rsec_z - scannerGeometry.n_rsec_z / 2 + ((scannerGeometry.n_rsec_z - 1) % 2 ) * 0.5F) * scannerGeometry.n_mod_z * scannerGeometry.n_smod_z * scannerGeometry.n_cry_z * scannerGeometry.detector_z_dim} } };
 
           rep_module.ids.push_back(module_id++);
           rep_module.transforms.push_back(transform);
@@ -633,8 +694,8 @@ int main(int argc, char** argv)
     {
 	    if (comptonPhantom1 == 0 && comptonPhantom2 == 0) {
         petsird::CoincidenceEvent event;
-        event.detector_ids[0] = calculate_detector_id(gantryID1, rsectorID1, moduleID1, submoduleID1, crystalID1, scannerGeometry);
-        event.detector_ids[1] = calculate_detector_id(gantryID2, rsectorID2, moduleID2, submoduleID2, crystalID2, scannerGeometry);
+        event.detector_ids[0] = calculate_detector_id(gantryID1, rsectorID1, moduleID1, submoduleID1, crystalID1, layerID1, scannerGeometry);
+        event.detector_ids[1] = calculate_detector_id(gantryID2, rsectorID2, moduleID2, submoduleID2, crystalID2, layerID2, scannerGeometry);
         double dt_psec = 1.0e12f*(time1 - time2); //in psec
         if (abs(dt_psec) > scannerGeometry.TxFOV_TOF/0.3f) {
           continue;
