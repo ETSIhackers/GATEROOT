@@ -1,50 +1,48 @@
-# PETSIRD template for use cases
-
-The purpose of this repo is to provide a starting point for other software that uses PETSIRD.
+# GATE ROOT to PETSIRD converter
 
 ## Background
 The [Emission Tomography Standardization Initiative (ETSI)](https://etsinitiative.org/)
 is working towards establishing a standard for PET Raw Data, called PETSIRD ("PET ETSI Raw Data").
 
-The specification uses the [yardl](https://aka.ms/yardl) tool to define the model. `yardl` can be
-used to read the specification (in the `model` directory) and generate an PI for both C++ and API to read/write PETSIRD data.
+This repository implements a convertor from output of [GATE](https://opengate.readthedocs.io/) (a Monte Carlo simulator) to PETSIRD
 
-Currently, a draft model is defined in https://github.com/ETSInitiative/PRDdefinition.
+## Version information
 
-CAVEAT: the draft model generates code in the `prd` namespace. Nevertheless, we have used the name PETSIRD here
-in most places (except where needed).
+This compiles with PETSIRD v0.7.2.
 
-## How to use this template?
+## Installation instructions
+1. Get the software
+   ```sh
+   git clone --recurse-submodules https://github.com/ETSIhackers/GATEROOT.git
+   ```
+2. Install dependencies, easiest via conda
+   ```sh
+   conda env create -f environment.yml
+   conda activate GATEROOT
+   ```
+3. Install yardl 0.6.3 and add it to your path
 
-These instructions will use `YourRepoName` for the name of your new repository. Obviously replace it with something appropriate.
+4. Build
+   ```sh
+   just build
+   ```
 
-#### Create a new repository based on this template
+### Updating from a previous version
 
-Easiest is to start from GitHub:
-1. Navigate to the URL of this repo: https://github.com/ETSInitiative/PETSIRDUseCaseTemplate
-2. Click on the `Use this template` button and create your own repo
-3. Pull it to your own local machine and modify
-   1. Search-and-replace all occurences of `PETSIRDUseCaseTemplate` with `YourRepoName`
-   2. Update the README.md to remove references to this template and write something about what your repo is going to do
-   3. Update the `environment.yml`to include what you need. For instance, if you need ROOT, add something like `- root=6.28.0`
-   4. Make some other basic changes and commit
-      ```sh
-      git commit -a -m "Updated template to YourRepoName"
-      git push
-      ```
+As we use a PETSIRD submodule, you have to take this into account
 
-### Using your repo
-
-1. Open ***your*** repo in [GitHub Codespaces](https://code.visualstudio.com/docs/remote/codespaces) or
-in a [VS Code devcontainer](https://code.visualstudio.com/docs/devcontainers/containers).
-This codespace/container will contain all necessary tools, including `yardl` itself, as well as your repository.
-2. Use `yardl` to generate C++ and Python code for the model:
+- update the code as follows
   ```sh
-  cd YourRepoName
-  cd PETSIRD/model
-  yardl generate
-  cd ../..
+  git pull
+  git submodule update --init
   ```
-3. Start working in either the [`cpp`](cpp/README.md) and/or [`python`](python/README.md) directories.
+- update your conda environment
+
+- remove existing build (as it might point to wrong environment) and build from scratch
+  ```sh
+   rm -rf cpp/build
+   just build
+   ```
+
 
 
