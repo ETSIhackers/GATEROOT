@@ -49,6 +49,8 @@
 
 using namespace std ;
 
+constexpr float speed_of_light_mm_per_ps = 0.299792458F;
+
 #include "petsird_helpers.h"
 
 struct ScannerGeometry
@@ -190,7 +192,7 @@ ScannerGeometry ReadScannerGeometry(const std::string& filename)
   scanner_geometry.max_d_ring = j["max_d_ring"];
   */
   scanner_geometry.number_of_tof_bins = j["number_of_tof_bins"];
-  scanner_geometry.tof_bin_width = j["tof_bin_width_mm"];
+  scanner_geometry.tof_bin_width = j["tof_bin_width"];
   scanner_geometry.number_of_energy_bins = j["number_of_energy_bins"];
   scanner_geometry.radius = j["radius"];
   /* fields for future expansion using binning
@@ -407,12 +409,12 @@ get_scanner_info(ScannerGeometry& scannerGeometry)
     FArray1D tof_bin_edges_arr;
     yardl::resize(tof_bin_edges_arr, { NUMBER_OF_TOF_BINS + 1 });
     for (std::size_t i = 0; i < tof_bin_edges_arr.size(); ++i)
-      tof_bin_edges_arr[i] = (i - NUMBER_OF_TOF_BINS / 2.F) * scannerGeometry.tof_bin_width * 0.3; // conversion from psec to mm (e.g. 200ps TOF is equivalent to 60mm)
+      tof_bin_edges_arr[i] = (i - NUMBER_OF_TOF_BINS / 2.F) * scannerGeometry.tof_bin_width * speed_of_light_mm_per_ps/2;
     const petsird::BinEdges tof_bin_edges{ tof_bin_edges_arr };
     all_tof_bin_edges[type_of_module][type_of_module] = tof_bin_edges;
 
     // TODO use speed-of-light here
-    all_tof_resolutions[type_of_module][type_of_module] = scannerGeometry.TOF_resolution*0.3; // conversion from psec to mm (e.g. 200ps TOF is equivalent to 60mm uncertainty)
+    all_tof_resolutions[type_of_module][type_of_module] = scannerGeometry.TOF_resolution*speed_of_light_mm_per_ps; // conversion from psec to mm (e.g. 200ps TOF is equivalent to 60mm uncertainty)
 
     FArray1D event_energy_bin_edges_arr;
     yardl::resize(event_energy_bin_edges_arr, { NUMBER_OF_EVENT_ENERGY_BINS + 1 });
@@ -436,7 +438,7 @@ uint32_t tofToIdx(double delta_time_psec, const petsird::ScannerInformation& sca
   constexpr petsird::TypeOfModule type_of_module{ 0 };
   const auto& tof_bin_edges = scanner_info.tof_bin_edges[type_of_module][type_of_module].edges;
 
-  float tofPos_mm = delta_time_psec * 0.15; //conversion from time difference (in psec) to spatial position in LOR (in mm) DT*C/2
+  const float tofPos_mm = delta_time_psec * speed_of_light_mm_per_ps/2;
   for (size_t i = 0; i < tof_bin_edges.size() - 1; ++i)
   {
     if (tofPos_mm >= tof_bin_edges[i] && tofPos_mm < tof_bin_edges[i+1])
