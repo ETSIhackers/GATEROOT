@@ -98,9 +98,9 @@ struct ScannerGeometry
   /* future expansion
   float ArcLength;
   float TxFOV;
+  float TxFOV_TOF; // in ps
   float module_axial_pitch;
   */
-  float TxFOV_TOF; // in ps
 };
 
 void WriteScannerGeometry(const ScannerGeometry& scanner_geometry, const std::string& filename)
@@ -213,9 +213,9 @@ ScannerGeometry ReadScannerGeometry(const std::string& filename)
   /* future expansion
   scanner_geometry.ArcLength = scanner_geometry.s_width * scanner_geometry.detector_y_dim / 2.0f;
   scanner_geometry.TxFOV = 2 * scanner_geometry.radius * sin (scanner_geometry.ArcLength / (2 * scanner_geometry.radius) );
+  scanner_geometry.TxFOV_TOF = scanner_geometry.tof_bin_width * scanner_geometry.number_of_tof_bins / 2;
   scanner_geometry.module_axial_pitch = scanner_geometry.n_cry_z * scanner_geometry.detector_z_dim + (scanner_geometry.n_cry_z - 1) * scanner_geometry.cry_ax_gap;
   */
-  scanner_geometry.TxFOV_TOF = scanner_geometry.tof_bin_width * scanner_geometry.number_of_tof_bins / 2;
   return scanner_geometry;
 }
 
@@ -433,12 +433,11 @@ get_scanner_info(ScannerGeometry& scannerGeometry)
 
 
 
-uint32_t tofToIdx(double delta_time_psec, const petsird::ScannerInformation& scanner_info)
+uint32_t tofToIdx(double tofPos_mm, const petsird::ScannerInformation& scanner_info)
 {
   constexpr petsird::TypeOfModule type_of_module{ 0 };
   const auto& tof_bin_edges = scanner_info.tof_bin_edges[type_of_module][type_of_module].edges;
 
-  const float tofPos_mm = delta_time_psec * speed_of_light_mm_per_ps/2;
   for (size_t i = 0; i < tof_bin_edges.size() - 1; ++i)
   {
     if (tofPos_mm >= tof_bin_edges[i] && tofPos_mm < tof_bin_edges[i+1])
@@ -642,7 +641,8 @@ int main(int argc, char** argv)
     const auto& tof_bin_edges = header.scanner.tof_bin_edges[type_of_module][type_of_module];
     const auto num_tof_bins = tof_bin_edges.NumberOfBins();
     std::cout << "Number of TOF bins: " << num_tof_bins << std::endl;
-    std::cout << "TOF bin edges: " << tof_bin_edges.edges << std::endl;
+    std::cout << "TOF bin edges (mm): " << tof_bin_edges.edges << std::endl;
+    std::cout << "TOF resolution (mm): " << header.scanner.tof_resolution[type_of_module][type_of_module] << std::endl;
     const auto& event_energy_bin_edges = header.scanner.event_energy_bin_edges[type_of_module];
     const auto num_event_energy_bins = event_energy_bin_edges.NumberOfBins();
     std::cout << "Number of energy bins: " << num_event_energy_bins << std::endl;
@@ -679,11 +679,8 @@ int main(int argc, char** argv)
         expanded_detection_bin.element_index = calculate_element_index(moduleID2, submoduleID2, crystalID2, layerID2, scannerGeometry);
         expanded_detection_bin.energy_index = static_cast<uint32_t>(energyToIdx(1.0e3*energy2, scanner));
         event.detection_bins[1] = petsird_helpers::make_detection_bin(header.scanner, type_of_module, expanded_detection_bin);
-        double dt_psec = 1.0e12f*(time1 - time2); //in psec
-        if (abs(dt_psec) > scannerGeometry.TxFOV_TOF) {
-          continue;
-        }
-        event.tof_idx = static_cast<uint32_t>(tofToIdx(dt_psec, scanner));
+        const double tofPos_mm = 1.0e12 * (time1 - time2) * speed_of_light_mm_per_ps / 2; //in mm
+        event.tof_idx = tofToIdx(tofPos_mm, scanner);
 
         if (verbose && i%100000 == 0) {
           std::cout << "Event " << i << std::endl;
