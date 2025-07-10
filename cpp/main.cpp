@@ -407,7 +407,7 @@ get_scanner_info(ScannerGeometry& scannerGeometry)
     FArray1D tof_bin_edges_arr;
     yardl::resize(tof_bin_edges_arr, { NUMBER_OF_TOF_BINS + 1 });
     for (std::size_t i = 0; i < tof_bin_edges_arr.size(); ++i)
-      tof_bin_edges_arr[i] = (i - NUMBER_OF_TOF_BINS / 2.F) * scannerGeometry.tof_bin_width;
+      tof_bin_edges_arr[i] = (i - NUMBER_OF_TOF_BINS / 2.F) * scannerGeometry.tof_bin_width * 0.3; // conversion from psec to mm (e.g. 200ps TOF is equivalent to 60mm)
     const petsird::BinEdges tof_bin_edges{ tof_bin_edges_arr };
     all_tof_bin_edges[type_of_module][type_of_module] = tof_bin_edges;
 
