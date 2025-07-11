@@ -13,9 +13,9 @@
 //  *********************************************************************
 //
 //######################################################################################
-//# Authors   : Nicolas A Karakatsanis, Kris Thielemans                                #
+//# Authors   : Nicolas A Karakatsanis, Kris Thielemans, Michael Hansen                #
 //#                                                                                    #
-//# Date  03-NOV-2024 - July 2025                                                      #
+//# Date  23-NOV-2023 - July 2025                                                      #
 //#                                                                                    #
 //# Objective : To read the coincidences TTree from the .root file, and generate  the  #
 //#             corresponding PETSIRD file.                                            #
