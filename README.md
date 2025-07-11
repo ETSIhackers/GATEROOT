@@ -68,20 +68,20 @@ As we use a PETSIRD submodule, you have to take this into account
   "detector_x_dim": 20.0,
   "detector_y_dim": 3.2,
   "detector_z_dim": 3.2,
-  "number_of_tof_bins": 62,
-  "tof_bin_width": 70,
-  "TOF_resolution": 200,
+  "number_of_TOF_bins": 62,
+  "TOF_bin_width_ps": 70,
+  "TOF_resolution_ps": 200,
   "number_of_energy_bins": 1,
   "energy_LLD": 430.0,
   "energy_ULD": 650.0,
   "EnergyResolutionAt511": 0.11,
-  "LM_TimeBlockDuration": 1
+  "LM_time_block_duration_ms": 1
 }
 ```
 Units:
-- dimensions and radius is in mm
+- dimensions and radius are in mm
 - TOF resolution and bin width is in ps
 - LLD and ULD are in keV
 - energy resolution is a fraction of 511 keV
-- LM_TimeBlockDuration is in ms
+- LM_time_block_duration_ms is in ms
 
