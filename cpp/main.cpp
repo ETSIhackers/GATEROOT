@@ -81,7 +81,7 @@ struct ScannerGeometry
   int max_d_ring;
   */
   int number_of_TOF_bins;
-  float TOF_bin_width_ps; // in ps
+  float TOF_bin_width_mm;
   int number_of_energy_bins;
   float radius;
   /* future expansion
@@ -93,8 +93,8 @@ struct ScannerGeometry
   float detector_x_dim, detector_y_dim, detector_z_dim; // in mm
   float energy_LLD, energy_ULD;
   float EnergyResolutionAt511;
-  float TOF_resolution_ps; // in ps
-  float LM_time_block_duration_ms; // in ms
+  float TOF_resolution_mm;
+  float LM_time_block_duration_ms;
   /* future expansion
   float ArcLength;
   float TxFOV;
@@ -129,8 +129,8 @@ void WriteScannerGeometry(const ScannerGeometry& scanner_geometry, const std::st
   j["rsec_ax_gap"] = scanner_geometry.rsec_ax_gap;
   j["rsec_tx_gap"] = scanner_geometry.rsec_tx_gap;
   j["number_of_TOF_bins"] = scanner_geometry.number_of_TOF_bins;
-  j["TOF_bin_width_ps"] = scanner_geometry.TOF_bin_width_ps;
-  j["TOF_resolution_ps"] = scanner_geometry.TOF_resolution_ps;
+  j["TOF_bin_width_mm"] = scanner_geometry.TOF_bin_width_mm;
+  j["TOF_resolution_mm"] = scanner_geometry.TOF_resolution_mm;
   j["number_of_energy_bins"] = scanner_geometry.number_of_energy_bins;
   j["radius"] = scanner_geometry.radius;
   /* fields for future expansion using binning
@@ -150,7 +150,7 @@ void WriteScannerGeometry(const ScannerGeometry& scanner_geometry, const std::st
   /* future expansion
   j["ArcLength"] = scanner_geometry.s_width * scanner_geometry.detector_y_dim / 2.0f;
   j["TxFOV"] = 2 * scanner_geometry.radius * sin (scanner_geometry.ArcLength / (2 * scanner_geometry.radius) );
-  j["TxFOV_TOF"] = scanner_geometry.TxFOV + speed_of_light_mm_per_ps*scanner_geometry.TOF_resolution_ps;
+  j["TxFOV_TOF"] = scanner_geometry.number_of_TOF_bins * scanner_geometry.TOF_bin_width_mm;
   j["module_axial_pitch"] = scanner_geometry.n_cry_z * scanner_geometry.detector_z_dim + (scanner_geometry.n_cry_z - 1) * scanner_geometry.cry_ax_gap;
   */
 
@@ -192,7 +192,7 @@ ScannerGeometry ReadScannerGeometry(const std::string& filename)
   scanner_geometry.max_d_ring = j["max_d_ring"];
   */
   scanner_geometry.number_of_TOF_bins = j["number_of_TOF_bins"];
-  scanner_geometry.TOF_bin_width_ps = j["TOF_bin_width_ps"];
+  scanner_geometry.TOF_bin_width_mm = j["TOF_bin_width_mm"];
   scanner_geometry.number_of_energy_bins = j["number_of_energy_bins"];
   scanner_geometry.radius = j["radius"];
   /* fields for future expansion using binning
@@ -207,13 +207,13 @@ ScannerGeometry ReadScannerGeometry(const std::string& filename)
   scanner_geometry.energy_LLD = j["energy_LLD"];
   scanner_geometry.energy_ULD = j["energy_ULD"];
   scanner_geometry.EnergyResolutionAt511 = j["EnergyResolutionAt511"];
-  scanner_geometry.TOF_resolution_ps = j["TOF_resolution_ps"];
+  scanner_geometry.TOF_resolution_mm = j["TOF_resolution_mm"];
   scanner_geometry.LM_time_block_duration_ms = j["LM_time_block_duration_ms"];
 
   /* future expansion
   scanner_geometry.ArcLength = scanner_geometry.s_width * scanner_geometry.detector_y_dim / 2.0f;
   scanner_geometry.TxFOV = 2 * scanner_geometry.radius * sin (scanner_geometry.ArcLength / (2 * scanner_geometry.radius) );
-  scanner_geometry.TxFOV_TOF = scanner_geometry.TOF_bin_width_ps * scanner_geometry.number_of_TOF_bins;
+  scanner_geometry.TxFOV_TOF = scanner_geometry.TOF_bin_width_mm * scanner_geometry.number_of_TOF_bins;
   scanner_geometry.module_axial_pitch = scanner_geometry.n_cry_z * scanner_geometry.detector_z_dim + (scanner_geometry.n_cry_z - 1) * scanner_geometry.cry_ax_gap;
   */
   return scanner_geometry;
@@ -409,12 +409,11 @@ get_scanner_info(ScannerGeometry& scannerGeometry)
     FArray1D tof_bin_edges_arr;
     yardl::resize(tof_bin_edges_arr, { NUMBER_OF_TOF_BINS + 1 });
     for (std::size_t i = 0; i < tof_bin_edges_arr.size(); ++i)
-      tof_bin_edges_arr[i] = (i - NUMBER_OF_TOF_BINS / 2.F) * scannerGeometry.TOF_bin_width_ps * speed_of_light_mm_per_ps/2;
+      tof_bin_edges_arr[i] = (i - NUMBER_OF_TOF_BINS / 2.F) * scannerGeometry.TOF_bin_width_mm;
     const petsird::BinEdges tof_bin_edges{ tof_bin_edges_arr };
     all_tof_bin_edges[type_of_module][type_of_module] = tof_bin_edges;
 
-    // TODO use speed-of-light here
-    all_tof_resolutions[type_of_module][type_of_module] = scannerGeometry.TOF_resolution_ps*speed_of_light_mm_per_ps; // TODO fix
+    all_tof_resolutions[type_of_module][type_of_module] = scannerGeometry.TOF_resolution_mm;
 
     FArray1D event_energy_bin_edges_arr;
     yardl::resize(event_energy_bin_edges_arr, { NUMBER_OF_EVENT_ENERGY_BINS + 1 });
@@ -642,7 +641,8 @@ int main(int argc, char** argv)
     const auto num_tof_bins = tof_bin_edges.NumberOfBins();
     std::cout << "Number of TOF bins: " << num_tof_bins << std::endl;
     std::cout << "TOF bin edges (mm): " << tof_bin_edges.edges << std::endl;
-    std::cout << "TOF resolution (mm): " << header.scanner.tof_resolution[type_of_module][type_of_module] << std::endl;
+    const auto TOF_resolution_mm = header.scanner.tof_resolution[type_of_module][type_of_module];
+    std::cout << "TOF resolution : " << TOF_resolution_mm << " mm = " << TOF_resolution_mm / (speed_of_light_mm_per_ps / 2) << " ps\n";
     const auto& event_energy_bin_edges = header.scanner.event_energy_bin_edges[type_of_module];
     const auto num_event_energy_bins = event_energy_bin_edges.NumberOfBins();
     std::cout << "Number of energy bins: " << num_event_energy_bins << std::endl;

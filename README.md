@@ -69,8 +69,8 @@ As we use a PETSIRD submodule, you have to take this into account
   "detector_y_dim": 3.2,
   "detector_z_dim": 3.2,
   "number_of_TOF_bins": 62,
-  "TOF_bin_width_ps": 70,
-  "TOF_resolution_ps": 200,
+  "TOF_bin_width_mm": 1.1,
+  "TOF_resolution_mm": 3.3,
   "number_of_energy_bins": 1,
   "energy_LLD": 430.0,
   "energy_ULD": 650.0,
@@ -80,7 +80,7 @@ As we use a PETSIRD submodule, you have to take this into account
 ```
 Units:
 - dimensions and radius are in mm
-- TOF resolution and bin width is in ps
+- TOF resolution and bin width are in mm (to convert from ps, multiply with 0.29979245 / 2)
 - LLD and ULD are in keV
 - energy resolution is a fraction of 511 keV
 - LM_time_block_duration_ms is in ms
