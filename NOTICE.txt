@@ -1,3 +1,4 @@
+Copyright 2023 Microsoft Research
 Copyright 2023 - 2025 Cornell
 Copyright 2025 University College London (UCL)
 
@@ -7,6 +8,7 @@ Initiative (ETSI), https://etisinitiative.org.
 Main contributors:
 Nikolaos A. Karakatsanis (Cornell)
 Kris Thielemans (UCL)
+Michael Hansen (Microsoft Research)
 
 ### Apache License ###
 
