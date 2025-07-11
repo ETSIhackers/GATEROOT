@@ -49,23 +49,23 @@
 
 using namespace std ;
 
+constexpr float speed_of_light_mm_per_ps = 0.299792458F;
+
 #include "petsird_helpers.h"
 
 struct ScannerGeometry
 {
+  /* future expansion
   int n_rings;
   int n_det;
   int s_width;
-  int n_rsec;
+  */
   int n_rsec_xy;
   int n_rsec_z;
-  int n_module;
   int n_mod_xy;
   int n_mod_z;
-  int n_submod;
   int n_smod_xy;
   int n_smod_z;
-  int n_crystal;
   int n_cry_xy;
   int n_cry_z;
   int n_cry_layers;
@@ -77,41 +77,46 @@ struct ScannerGeometry
   int mod_tx_gap;
   int rsec_ax_gap;
   int rsec_tx_gap;
+  /* future expansion
   int max_d_ring;
-  int number_of_tof_bins;
+  */
+  int number_of_TOF_bins;
+  float TOF_bin_width_mm;
   int number_of_energy_bins;
   float radius;
+  /* future expansion
   int tx_virtual_crystal_num;
   int ax_virtual_crystal_num;
   int tx_phys_crystal_num;
   int ax_phys_crystal_num;
-  float detector_x_dim, detector_y_dim, detector_z_dim;
+  */
+  float detector_x_dim, detector_y_dim, detector_z_dim; // in mm
   float energy_LLD, energy_ULD;
   float EnergyResolutionAt511;
-  float TOF_resolution;
-  float LM_TimeBlockDuration;
+  float TOF_resolution_mm;
+  float LM_time_block_duration_ms;
+  /* future expansion
   float ArcLength;
   float TxFOV;
-  float TxFOV_TOF;
+  float TxFOV_TOF; // in ps
   float module_axial_pitch;
+  */
 };
 
 void WriteScannerGeometry(const ScannerGeometry& scanner_geometry, const std::string& filename)
 {
   nlohmann::json j;
+  /* future expansion
   j["n_rings"] = scanner_geometry.n_rings;
   j["n_det"] = scanner_geometry.n_det;
   j["s_width"] = scanner_geometry.s_width;
-  j["n_rsec"] = scanner_geometry.n_rsec;
+  */
   j["n_rsec_xy"] = scanner_geometry.n_rsec_xy;
   j["n_rsec_z"] = scanner_geometry.n_rsec_z;
-  j["n_module"] = scanner_geometry.n_module;
   j["n_mod_xy"] = scanner_geometry.n_mod_xy;
   j["n_mod_z"] = scanner_geometry.n_mod_z;
-  j["n_submod"] = scanner_geometry.n_submod;
   j["n_smod_xy"] = scanner_geometry.n_smod_xy;
   j["n_smod_z"] = scanner_geometry.n_smod_z;
-  j["n_crystal"] = scanner_geometry.n_crystal;
   j["n_cry_xy"] = scanner_geometry.n_cry_xy;
   j["n_cry_z"] = scanner_geometry.n_cry_z;
   j["n_cry_layers"] = scanner_geometry.n_cry_layers;
@@ -123,28 +128,31 @@ void WriteScannerGeometry(const ScannerGeometry& scanner_geometry, const std::st
   j["mod_tx_gap"] = scanner_geometry.mod_tx_gap;
   j["rsec_ax_gap"] = scanner_geometry.rsec_ax_gap;
   j["rsec_tx_gap"] = scanner_geometry.rsec_tx_gap;
-  j["max_d_ring"] = scanner_geometry.max_d_ring;
-  j["number_of_tof_bins"] = scanner_geometry.number_of_tof_bins;
+  j["number_of_TOF_bins"] = scanner_geometry.number_of_TOF_bins;
+  j["TOF_bin_width_mm"] = scanner_geometry.TOF_bin_width_mm;
+  j["TOF_resolution_mm"] = scanner_geometry.TOF_resolution_mm;
   j["number_of_energy_bins"] = scanner_geometry.number_of_energy_bins;
   j["radius"] = scanner_geometry.radius;
+  /* fields for future expansion using binning
   j["tx_virtual_crystal_num"] = scanner_geometry.tx_virtual_crystal_num;
   j["ax_virtual_crystal_num"] = scanner_geometry.ax_virtual_crystal_num;
   j["tx_phys_crystal_num"] = scanner_geometry.tx_phys_crystal_num;
   j["ax_phys_crystal_num"] = scanner_geometry.ax_phys_crystal_num;
+  */
   j["detector_x_dim"] = scanner_geometry.detector_x_dim;
   j["detector_y_dim"] = scanner_geometry.detector_y_dim;
   j["detector_z_dim"] = scanner_geometry.detector_z_dim;
   j["energy_LLD"] = scanner_geometry.energy_LLD;
   j["energy_ULD"] = scanner_geometry.energy_ULD;
   j["EnergyResolutionAt511"] = scanner_geometry.EnergyResolutionAt511;
-  j["TOF_resolution"] = scanner_geometry.TOF_resolution;
-  j["LM_TimeBlockDuration"] = scanner_geometry.LM_TimeBlockDuration;
+  j["LM_time_block_duration_ms"] = scanner_geometry.LM_time_block_duration_ms;
 
+  /* future expansion
   j["ArcLength"] = scanner_geometry.s_width * scanner_geometry.detector_y_dim / 2.0f;
   j["TxFOV"] = 2 * scanner_geometry.radius * sin (scanner_geometry.ArcLength / (2 * scanner_geometry.radius) );
-  j["TxFOV_TOF"] = scanner_geometry.TxFOV + 0.3*scanner_geometry.TOF_resolution;
+  j["TxFOV_TOF"] = scanner_geometry.number_of_TOF_bins * scanner_geometry.TOF_bin_width_mm;
   j["module_axial_pitch"] = scanner_geometry.n_cry_z * scanner_geometry.detector_z_dim + (scanner_geometry.n_cry_z - 1) * scanner_geometry.cry_ax_gap;
-
+  */
 
   std::ofstream o(filename);
   o << std::setw(4) << j << std::endl;
@@ -158,19 +166,17 @@ ScannerGeometry ReadScannerGeometry(const std::string& filename)
   i >> j;
 
   ScannerGeometry scanner_geometry;
+  /* future expansion
   scanner_geometry.n_rings = j["n_rings"];
   scanner_geometry.n_det = j["n_det"];
   scanner_geometry.s_width = j["s_width"];
-  scanner_geometry.n_rsec = j["n_rsec"];
+  */
   scanner_geometry.n_rsec_xy = j["n_rsec_xy"];
   scanner_geometry.n_rsec_z = j["n_rsec_z"];
-  scanner_geometry.n_module = j["n_module"];
   scanner_geometry.n_mod_xy = j["n_mod_xy"];
   scanner_geometry.n_mod_z = j["n_mod_z"];
-  scanner_geometry.n_submod = j["n_submod"];
   scanner_geometry.n_smod_xy = j["n_smod_xy"];
   scanner_geometry.n_smod_z = j["n_smod_z"];
-  scanner_geometry.n_crystal = j["n_crystal"];
   scanner_geometry.n_cry_xy = j["n_cry_xy"];
   scanner_geometry.n_cry_z = j["n_cry_z"];
   scanner_geometry.n_cry_layers = j["n_cry_layers"];
@@ -182,28 +188,34 @@ ScannerGeometry ReadScannerGeometry(const std::string& filename)
   scanner_geometry.mod_tx_gap = j["mod_tx_gap"];
   scanner_geometry.rsec_ax_gap = j["rsec_ax_gap"];
   scanner_geometry.rsec_tx_gap = j["rsec_tx_gap"];
+  /* fields for future expansion using binning
   scanner_geometry.max_d_ring = j["max_d_ring"];
-  scanner_geometry.number_of_tof_bins = j["number_of_tof_bins"];
+  */
+  scanner_geometry.number_of_TOF_bins = j["number_of_TOF_bins"];
+  scanner_geometry.TOF_bin_width_mm = j["TOF_bin_width_mm"];
   scanner_geometry.number_of_energy_bins = j["number_of_energy_bins"];
   scanner_geometry.radius = j["radius"];
+  /* fields for future expansion using binning
   scanner_geometry.tx_virtual_crystal_num = j["tx_virtual_crystal_num"];
   scanner_geometry.ax_virtual_crystal_num = j["ax_virtual_crystal_num"];
   scanner_geometry.tx_phys_crystal_num = j["tx_phys_crystal_num"];
   scanner_geometry.ax_phys_crystal_num = j["ax_phys_crystal_num"];
+  */
   scanner_geometry.detector_x_dim = j["detector_x_dim"];
   scanner_geometry.detector_y_dim = j["detector_y_dim"];
   scanner_geometry.detector_z_dim = j["detector_z_dim"];
   scanner_geometry.energy_LLD = j["energy_LLD"];
   scanner_geometry.energy_ULD = j["energy_ULD"];
   scanner_geometry.EnergyResolutionAt511 = j["EnergyResolutionAt511"];
-  scanner_geometry.TOF_resolution = j["TOF_resolution"];
-  scanner_geometry.LM_TimeBlockDuration = j["LM_TimeBlockDuration"];
+  scanner_geometry.TOF_resolution_mm = j["TOF_resolution_mm"];
+  scanner_geometry.LM_time_block_duration_ms = j["LM_time_block_duration_ms"];
 
+  /* future expansion
   scanner_geometry.ArcLength = scanner_geometry.s_width * scanner_geometry.detector_y_dim / 2.0f;
   scanner_geometry.TxFOV = 2 * scanner_geometry.radius * sin (scanner_geometry.ArcLength / (2 * scanner_geometry.radius) );
-  scanner_geometry.TxFOV_TOF = scanner_geometry.TxFOV + 0.3*scanner_geometry.TOF_resolution;
+  scanner_geometry.TxFOV_TOF = scanner_geometry.TOF_bin_width_mm * scanner_geometry.number_of_TOF_bins;
   scanner_geometry.module_axial_pitch = scanner_geometry.n_cry_z * scanner_geometry.detector_z_dim + (scanner_geometry.n_cry_z - 1) * scanner_geometry.cry_ax_gap;
-
+  */
   return scanner_geometry;
 }
 
@@ -361,7 +373,7 @@ get_scanner_info(ScannerGeometry& scannerGeometry)
   // float radius = scannerGeometry.radius;
   // int n_detectors = scannerGeometry.n_det;
   // int n_rings = scannerGeometry.n_rings;
-  unsigned long NUMBER_OF_TOF_BINS = static_cast<unsigned long>(scannerGeometry.number_of_tof_bins);
+  unsigned long NUMBER_OF_TOF_BINS = static_cast<unsigned long>(scannerGeometry.number_of_TOF_bins);
   unsigned long NUMBER_OF_EVENT_ENERGY_BINS = static_cast<unsigned long>(scannerGeometry.number_of_energy_bins);
   float energy_LLD = scannerGeometry.energy_LLD;
   float energy_ULD =scannerGeometry.energy_ULD;
@@ -397,12 +409,11 @@ get_scanner_info(ScannerGeometry& scannerGeometry)
     FArray1D tof_bin_edges_arr;
     yardl::resize(tof_bin_edges_arr, { NUMBER_OF_TOF_BINS + 1 });
     for (std::size_t i = 0; i < tof_bin_edges_arr.size(); ++i)
-      tof_bin_edges_arr[i] = (i - NUMBER_OF_TOF_BINS / 2.F) / NUMBER_OF_TOF_BINS * 2 * scannerGeometry.TxFOV_TOF;
+      tof_bin_edges_arr[i] = (i - NUMBER_OF_TOF_BINS / 2.F) * scannerGeometry.TOF_bin_width_mm;
     const petsird::BinEdges tof_bin_edges{ tof_bin_edges_arr };
     all_tof_bin_edges[type_of_module][type_of_module] = tof_bin_edges;
 
-    // TODO use speed-of-light here
-    all_tof_resolutions[type_of_module][type_of_module] = scannerGeometry.TOF_resolution*0.3; // conversion from psec to mm (e.g. 200ps TOF is equivalent to 60mm uncertainty)
+    all_tof_resolutions[type_of_module][type_of_module] = scannerGeometry.TOF_resolution_mm;
 
     FArray1D event_energy_bin_edges_arr;
     yardl::resize(event_energy_bin_edges_arr, { NUMBER_OF_EVENT_ENERGY_BINS + 1 });
@@ -421,12 +432,11 @@ get_scanner_info(ScannerGeometry& scannerGeometry)
 
 
 
-uint32_t tofToIdx(double delta_time_psec, const petsird::ScannerInformation& scanner_info)
+uint32_t tofToIdx(double tofPos_mm, const petsird::ScannerInformation& scanner_info)
 {
   constexpr petsird::TypeOfModule type_of_module{ 0 };
   const auto& tof_bin_edges = scanner_info.tof_bin_edges[type_of_module][type_of_module].edges;
 
-  float tofPos_mm = delta_time_psec * 0.15; //conversion from time difference (in psec) to spatial position in LOR (in mm) DT*C/2
   for (size_t i = 0; i < tof_bin_edges.size() - 1; ++i)
   {
     if (tofPos_mm >= tof_bin_edges[i] && tofPos_mm < tof_bin_edges[i+1])
@@ -630,7 +640,9 @@ int main(int argc, char** argv)
     const auto& tof_bin_edges = header.scanner.tof_bin_edges[type_of_module][type_of_module];
     const auto num_tof_bins = tof_bin_edges.NumberOfBins();
     std::cout << "Number of TOF bins: " << num_tof_bins << std::endl;
-    std::cout << "TOF bin edges: " << tof_bin_edges.edges << std::endl;
+    std::cout << "TOF bin edges (mm): " << tof_bin_edges.edges << std::endl;
+    const auto TOF_resolution_mm = header.scanner.tof_resolution[type_of_module][type_of_module];
+    std::cout << "TOF resolution : " << TOF_resolution_mm << " mm = " << TOF_resolution_mm / (speed_of_light_mm_per_ps / 2) << " ps\n";
     const auto& event_energy_bin_edges = header.scanner.event_energy_bin_edges[type_of_module];
     const auto num_event_energy_bins = event_energy_bin_edges.NumberOfBins();
     std::cout << "Number of energy bins: " << num_event_energy_bins << std::endl;
@@ -644,7 +656,7 @@ int main(int argc, char** argv)
   long current_time_block = -1;
   auto time_block = create_new_time_block(header.scanner);
 
-  const auto event_time_block_duration = scannerGeometry.LM_TimeBlockDuration; // ms
+  const auto event_time_block_duration = scannerGeometry.LM_time_block_duration_ms; // ms
   const petsird::TypeOfModule type_of_module{ 0 };
   unsigned long Counts_binned = 0;
   for (unsigned long long int i = 0 ; i < nentries ; i++)
@@ -667,11 +679,8 @@ int main(int argc, char** argv)
         expanded_detection_bin.element_index = calculate_element_index(moduleID2, submoduleID2, crystalID2, layerID2, scannerGeometry);
         expanded_detection_bin.energy_index = static_cast<uint32_t>(energyToIdx(1.0e3*energy2, scanner));
         event.detection_bins[1] = petsird_helpers::make_detection_bin(header.scanner, type_of_module, expanded_detection_bin);
-        double dt_psec = 1.0e12f*(time1 - time2); //in psec
-        if (abs(dt_psec) > scannerGeometry.TxFOV_TOF/0.3f) {
-          continue;
-        }
-        event.tof_idx = static_cast<uint32_t>(tofToIdx(dt_psec, scanner));
+        const double tofPos_mm = 1.0e12 * (time1 - time2) * speed_of_light_mm_per_ps / 2; //in mm
+        event.tof_idx = tofToIdx(tofPos_mm, scanner);
 
         if (verbose && i%100000 == 0) {
           std::cout << "Event " << i << std::endl;
