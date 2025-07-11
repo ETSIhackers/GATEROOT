@@ -158,6 +158,17 @@ void WriteScannerGeometry(const ScannerGeometry& scanner_geometry, const std::st
   o << std::setw(4) << j << std::endl;
 }
 
+auto get_value(const nlohmann::json& j, const std::string& key)
+{
+  if (!j.contains(key))
+    {
+      std::stringstream s;
+      s << "ERROR: key \"" << key << "\" is missing from the JSON file";
+      throw std::runtime_error(s.str());
+    }
+  return j[key];
+}
+
 // Function for reading json scanner geometry
 ScannerGeometry ReadScannerGeometry(const std::string& filename)
 {
@@ -167,48 +178,51 @@ ScannerGeometry ReadScannerGeometry(const std::string& filename)
 
   ScannerGeometry scanner_geometry;
   /* future expansion
-  scanner_geometry.n_rings = j["n_rings"];
-  scanner_geometry.n_det = j["n_det"];
-  scanner_geometry.s_width = j["s_width"];
+  scanner_geometry.n_rings = get_value(j, "n_rings");
+  scanner_geometry.n_det = get_value(j, "n_det");
+  scanner_geometry.s_width = get_value(j, "s_width");
   */
-  scanner_geometry.n_rsec_xy = j["n_rsec_xy"];
-  scanner_geometry.n_rsec_z = j["n_rsec_z"];
-  scanner_geometry.n_mod_xy = j["n_mod_xy"];
-  scanner_geometry.n_mod_z = j["n_mod_z"];
-  scanner_geometry.n_smod_xy = j["n_smod_xy"];
-  scanner_geometry.n_smod_z = j["n_smod_z"];
-  scanner_geometry.n_cry_xy = j["n_cry_xy"];
-  scanner_geometry.n_cry_z = j["n_cry_z"];
-  scanner_geometry.n_cry_layers = j["n_cry_layers"];
-  scanner_geometry.cry_ax_gap = j["cry_ax_gap"];
-  scanner_geometry.cry_tx_gap = j["cry_tx_gap"];
-  scanner_geometry.smod_ax_gap = j["smod_ax_gap"];
-  scanner_geometry.smod_tx_gap = j["smod_tx_gap"];
-  scanner_geometry.mod_ax_gap = j["mod_ax_gap"];
-  scanner_geometry.mod_tx_gap = j["mod_tx_gap"];
-  scanner_geometry.rsec_ax_gap = j["rsec_ax_gap"];
-  scanner_geometry.rsec_tx_gap = j["rsec_tx_gap"];
+  scanner_geometry.n_rsec_xy = get_value(j, "n_rsec_xy");
+  scanner_geometry.n_rsec_z = get_value(j, "n_rsec_z");
+  scanner_geometry.n_mod_xy = get_value(j, "n_mod_xy");
+  scanner_geometry.n_mod_z = get_value(j, "n_mod_z");
+  scanner_geometry.n_smod_xy = get_value(j, "n_smod_xy");
+  scanner_geometry.n_smod_z = get_value(j, "n_smod_z");
+  scanner_geometry.n_cry_xy = get_value(j, "n_cry_xy");
+  scanner_geometry.n_cry_z = get_value(j, "n_cry_z");
+  scanner_geometry.n_cry_layers = get_value(j, "n_cry_layers");
+  scanner_geometry.cry_ax_gap = get_value(j, "cry_ax_gap");
+  scanner_geometry.cry_tx_gap = get_value(j, "cry_tx_gap");
+  scanner_geometry.smod_ax_gap = get_value(j, "smod_ax_gap");
+  scanner_geometry.smod_tx_gap = get_value(j, "smod_tx_gap");
+  scanner_geometry.mod_ax_gap = get_value(j, "mod_ax_gap");
+  scanner_geometry.mod_tx_gap = get_value(j, "mod_tx_gap");
+  scanner_geometry.rsec_ax_gap = get_value(j, "rsec_ax_gap");
+  scanner_geometry.rsec_tx_gap = get_value(j, "rsec_tx_gap");
   /* fields for future expansion using binning
-  scanner_geometry.max_d_ring = j["max_d_ring"];
+  scanner_geometry.max_d_ring = get_value(j, "max_d_ring");
   */
-  scanner_geometry.number_of_TOF_bins = j["number_of_TOF_bins"];
-  scanner_geometry.TOF_bin_width_mm = j["TOF_bin_width_mm"];
-  scanner_geometry.number_of_energy_bins = j["number_of_energy_bins"];
-  scanner_geometry.radius = j["radius"];
+  //scanner_geometry.number_of_TOF_bins = get_value(j, "number_of_TOF_bins");
+  //scanner_geometry.TOF_bin_width_mm = get_value(j, "TOF_bin_width_mm");
+  scanner_geometry.number_of_TOF_bins = get_value(j, "number_of_TOF_bins");
+  scanner_geometry.TOF_bin_width_mm = get_value(j, "TOF_bin_width_mm");
+
+  scanner_geometry.number_of_energy_bins = get_value(j, "number_of_energy_bins");
+  scanner_geometry.radius = get_value(j, "radius");
   /* fields for future expansion using binning
-  scanner_geometry.tx_virtual_crystal_num = j["tx_virtual_crystal_num"];
-  scanner_geometry.ax_virtual_crystal_num = j["ax_virtual_crystal_num"];
-  scanner_geometry.tx_phys_crystal_num = j["tx_phys_crystal_num"];
-  scanner_geometry.ax_phys_crystal_num = j["ax_phys_crystal_num"];
+  scanner_geometry.tx_virtual_crystal_num = get_value(j, "tx_virtual_crystal_num");
+  scanner_geometry.ax_virtual_crystal_num = get_value(j, "ax_virtual_crystal_num");
+  scanner_geometry.tx_phys_crystal_num = get_value(j, "tx_phys_crystal_num");
+  scanner_geometry.ax_phys_crystal_num = get_value(j, "ax_phys_crystal_num");
   */
-  scanner_geometry.detector_x_dim = j["detector_x_dim"];
-  scanner_geometry.detector_y_dim = j["detector_y_dim"];
-  scanner_geometry.detector_z_dim = j["detector_z_dim"];
-  scanner_geometry.energy_LLD = j["energy_LLD"];
-  scanner_geometry.energy_ULD = j["energy_ULD"];
-  scanner_geometry.EnergyResolutionAt511 = j["EnergyResolutionAt511"];
-  scanner_geometry.TOF_resolution_mm = j["TOF_resolution_mm"];
-  scanner_geometry.LM_time_block_duration_ms = j["LM_time_block_duration_ms"];
+  scanner_geometry.detector_x_dim = get_value(j, "detector_x_dim");
+  scanner_geometry.detector_y_dim = get_value(j, "detector_y_dim");
+  scanner_geometry.detector_z_dim = get_value(j, "detector_z_dim");
+  scanner_geometry.energy_LLD = get_value(j, "energy_LLD");
+  scanner_geometry.energy_ULD = get_value(j, "energy_ULD");
+  scanner_geometry.EnergyResolutionAt511 = get_value(j, "EnergyResolutionAt511");
+  scanner_geometry.TOF_resolution_mm = get_value(j, "TOF_resolution_mm");
+  scanner_geometry.LM_time_block_duration_ms = get_value(j, "LM_time_block_duration_ms");
 
   /* future expansion
   scanner_geometry.ArcLength = scanner_geometry.s_width * scanner_geometry.detector_y_dim / 2.0f;
@@ -515,7 +529,15 @@ int main(int argc, char** argv)
     std::cerr << "Need to specify scanner geometry" << std::endl;
     return 1;
   } else {
-    scannerGeometry = ReadScannerGeometry(scanner_geometry_file);
+    try
+      {
+        scannerGeometry = ReadScannerGeometry(scanner_geometry_file);
+      }
+    catch (const std::runtime_error& e)
+      {
+        std::cerr << e.what() << std::endl;
+        return 1;
+      }
   }
 
   string filedir, inputfilename;
