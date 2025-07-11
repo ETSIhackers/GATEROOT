@@ -266,19 +266,8 @@ int calculate_module_index(int gantry_id, int rsector_id, const ScannerGeometry&
 
 //! return a cuboid volume
 petsird::BoxSolidVolume
-get_crystal(ScannerGeometry& scannerGeometry)
+get_crystal(const ScannerGeometry& scannerGeometry)
 {
-  /* //shift +half_crystal_dim in y and z
-  using petsird::Coordinate;
-  petsird::BoxShape crystal_shape{ Coordinate{ { -scannerGeometry.detector_x_dim/2, 0, 0 } },
-                                   Coordinate{ { -scannerGeometry.detector_x_dim/2, 0, scannerGeometry.detector_z_dim } },
-                                   Coordinate{ { -scannerGeometry.detector_x_dim/2, scannerGeometry.detector_y_dim, scannerGeometry.detector_z_dim } },
-                                   Coordinate{ { -scannerGeometry.detector_x_dim/2, scannerGeometry.detector_y_dim, 0 } },
-                                   Coordinate{ { scannerGeometry.detector_x_dim/2, 0, 0 } },
-                                   Coordinate{ { scannerGeometry.detector_x_dim/2, 0, scannerGeometry.detector_z_dim } },
-                                   Coordinate{ { scannerGeometry.detector_x_dim/2, scannerGeometry.detector_y_dim, scannerGeometry.detector_z_dim } },
-                                   Coordinate{ { scannerGeometry.detector_x_dim/2, scannerGeometry.detector_y_dim, 0 } } };
-  */
  //shift 0 in y and z
  using petsird::Coordinate;
   petsird::BoxShape crystal_shape{ Coordinate{ { -scannerGeometry.detector_x_dim/2, -scannerGeometry.detector_y_dim/2, -scannerGeometry.detector_z_dim/2 } },
@@ -289,17 +278,6 @@ get_crystal(ScannerGeometry& scannerGeometry)
                                    Coordinate{ { scannerGeometry.detector_x_dim/2, -scannerGeometry.detector_y_dim/2, scannerGeometry.detector_z_dim/2 } },
                                    Coordinate{ { scannerGeometry.detector_x_dim/2, scannerGeometry.detector_y_dim/2, scannerGeometry.detector_z_dim/2 } },
                                    Coordinate{ { scannerGeometry.detector_x_dim/2, scannerGeometry.detector_y_dim/2, -scannerGeometry.detector_z_dim/2 } } };
-  /*  //shift -half_crystal_dim in y and z
-  using petsird::Coordinate;
-  petsird::BoxShape crystal_shape{ Coordinate{ { -scannerGeometry.detector_x_dim/2, -scannerGeometry.detector_y_dim, -scannerGeometry.detector_z_dim } },
-                                   Coordinate{ { -scannerGeometry.detector_x_dim/2, -scannerGeometry.detector_y_dim, 0 } },
-                                   Coordinate{ { -scannerGeometry.detector_x_dim/2, 0, 0 } },
-                                   Coordinate{ { -scannerGeometry.detector_x_dim/2, 0, -scannerGeometry.detector_z_dim } },
-                                   Coordinate{ { scannerGeometry.detector_x_dim/2, -scannerGeometry.detector_y_dim, -scannerGeometry.detector_z_dim } },
-                                   Coordinate{ { scannerGeometry.detector_x_dim/2, -scannerGeometry.detector_y_dim, 0 } },
-                                   Coordinate{ { scannerGeometry.detector_x_dim/2, 0, 0 } },
-                                   Coordinate{ { scannerGeometry.detector_x_dim/2, 0, -scannerGeometry.detector_z_dim } } };
-  */
   petsird::BoxSolidVolume crystal{ crystal_shape, /* material_id */ 1 };
   return crystal;
 }
@@ -307,7 +285,7 @@ get_crystal(ScannerGeometry& scannerGeometry)
 
 //! return a module of NUM_CRYSTALS_PER_MODULE cuboids
 petsird::DetectorModule
-get_detector_module(ScannerGeometry& scannerGeometry)
+get_detector_module(const ScannerGeometry& scannerGeometry)
 {
   petsird::ReplicatedBoxSolidVolume rep_volume;
   {
@@ -340,7 +318,7 @@ get_detector_module(ScannerGeometry& scannerGeometry)
 
 //! return scanner build by rotating a module around the (0,0,1) axis
 petsird::ScannerGeometry
-get_scanner_geometry(ScannerGeometry& scannerGeometry)
+get_scanner_geometry(const ScannerGeometry& scannerGeometry)
 {
   petsird::ReplicatedDetectorModule rep_module;
   {
@@ -366,17 +344,13 @@ get_scanner_geometry(ScannerGeometry& scannerGeometry)
   return scanner_geometry;
 }
 
-// single ring as example
 petsird::ScannerInformation
-get_scanner_info(ScannerGeometry& scannerGeometry)
+get_scanner_info(const ScannerGeometry& scannerGeometry)
 {
-  // float radius = scannerGeometry.radius;
-  // int n_detectors = scannerGeometry.n_det;
-  // int n_rings = scannerGeometry.n_rings;
-  unsigned long NUMBER_OF_TOF_BINS = static_cast<unsigned long>(scannerGeometry.number_of_TOF_bins);
-  unsigned long NUMBER_OF_EVENT_ENERGY_BINS = static_cast<unsigned long>(scannerGeometry.number_of_energy_bins);
-  float energy_LLD = scannerGeometry.energy_LLD;
-  float energy_ULD =scannerGeometry.energy_ULD;
+  const unsigned long NUMBER_OF_TOF_BINS = static_cast<unsigned long>(scannerGeometry.number_of_TOF_bins);
+  const unsigned long NUMBER_OF_EVENT_ENERGY_BINS = static_cast<unsigned long>(scannerGeometry.number_of_energy_bins);
+  const float energy_LLD = scannerGeometry.energy_LLD;
+  const float energy_ULD =scannerGeometry.energy_ULD;
 
   petsird::ScannerInformation scanner_info;
   scanner_info.model_name = "PETSIRD_GATEROOT"; // TODO
@@ -490,9 +464,9 @@ auto create_new_time_block(const petsird::ScannerInformation& scanner)
 
 int main(int argc, char** argv)
 {
-  std::string root_prefix  = std::string{};
-  std::string scanner_geometry_file = std::string{};
-  std::string petsird_file = std::string{};
+  std::string root_prefix;
+  std::string scanner_geometry_file;
+  std::string petsird_file;
   int number_of_root_files = 2;
   bool verbose = false;
 
@@ -538,7 +512,7 @@ int main(int argc, char** argv)
   // Read scanner geometry
   ScannerGeometry scannerGeometry;
   if (scanner_geometry_file.empty()) {
-    std::cout << "Using default scanner geometry" << std::endl;
+    std::cerr << "Need to specify scanner geometry" << std::endl;
     return 1;
   } else {
     scannerGeometry = ReadScannerGeometry(scanner_geometry_file);
