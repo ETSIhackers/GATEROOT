@@ -26,7 +26,8 @@
   "rsec_ax_gap": 0,
   "rsec_tx_gap": 0,
   "number_of_energy_bins": 1,
-  "number_of_tof_bins": 62,
+  "number_of_TOF_bins": 62,
+  "TOF_bin_width_mm": 10,
   "radius": 313.0,
   "s_width": 380,
   "tx_phys_crystal_num": 10,
@@ -37,6 +38,6 @@
   "energy_LLD": 430.0,
   "energy_ULD": 650.0,
   "EnergyResolutionAt511": 0.11,
-  "TOF_resolution": 200,
-  "LM_TimeBlockDuration": 1
+  "TOF_resolution_mm": 30,
+  "LM_time_block_duration_ms": 1
 }

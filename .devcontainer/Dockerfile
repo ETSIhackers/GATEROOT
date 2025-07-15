@@ -29,7 +29,6 @@ ARG USERNAME="vscode"
 ARG USER_UID=1000
 ARG USER_GID=$USER_UID
 ARG CONDA_GID=900
-ARG CONDA_ENVIRONMENT_NAME=petsird
 
 RUN apt-get update && apt-get install -y \
     libc6-dbg \
@@ -83,12 +82,12 @@ ENV CMAKE_GENERATOR=Ninja
 
 # Create a kits file for the VSCode CMake Tools extension, so you are not prompted for which kit to select whenever you open VSCode
 RUN mkdir -p /home/vscode/.local/share/CMakeTools \
-    && echo '[{"name":"GCC-10","compilers":{"C":"/opt/conda/envs/petsird/bin/x86_64-conda_cos6-linux-gnu-gcc","CXX":"/opt/conda/envs/petsird/bin/x86_64-conda_cos6-linux-gnu-g++"}}]' > /home/vscode/.local/share/CMakeTools/cmake-tools-kits.json \
+    && echo '[{"name":"Conda GCC","compilers":{"C":"/opt/conda/envs/GATEROOT/bin/x86_64-conda-linux-gnu-gcc","Conda G++":"/opt/conda/envs/GATEROOT/bin/x86_64-conda-linux-gnu-g++"}}]' > /home/vscode/.local/share/CMakeTools/cmake-tools-kits.json \
     && chown vscode:conda /home/vscode/.local/share/CMakeTools/cmake-tools-kits.json
 
 # Install the yardl tool
 ARG YARDL_VERSION=0.6.3
 RUN wget --quiet "https://github.com/microsoft/yardl/releases/download/v${YARDL_VERSION}/yardl_${YARDL_VERSION}_linux_x86_64.tar.gz" \
     && tar -xzf "yardl_${YARDL_VERSION}_linux_x86_64.tar.gz" \
-    && mv yardl "/opt/conda/envs/${CONDA_ENVIRONMENT_NAME}/bin/" \
+    && mv yardl "/opt/conda/envs/GATEROOT/bin/" \
     && rm "yardl_${YARDL_VERSION}_linux_x86_64.tar.gz"
