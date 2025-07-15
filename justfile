@@ -13,7 +13,7 @@ default: run
     cd cpp/build; \
     cmake -GNinja ..
 
-@build: generate configure
+@build: configure
     cd cpp/build; \
     ninja
 

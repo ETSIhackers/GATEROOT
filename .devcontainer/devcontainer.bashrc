@@ -2,7 +2,7 @@
 # shellcheck source=/dev/null
 
 source /opt/conda/etc/profile.d/conda.sh
-conda activate petsird
+conda activate GATEROOT
 source <(yardl completion bash)
 
 if [[ "${BASH_ENV:-}" == "$(readlink -f "${BASH_SOURCE[0]:-}")" ]]; then

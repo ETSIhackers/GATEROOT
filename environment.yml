@@ -1,7 +1,6 @@
 name: GATEROOT
 channels:
   - conda-forge
-  - defaults
 dependencies:
   - bash-completion>=2.11
   - cmake>=3.21.3
