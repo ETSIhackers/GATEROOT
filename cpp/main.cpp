@@ -263,8 +263,8 @@ int calculate_element_index(int module_id, int submodule_id, int crystal_id, int
   //            + (Int_t)(module_id/N_MOD_xy + (module_id%N_MOD_xy)*N_MOD_z)*N_CRY_layers*N_CRY_xy*N_CRY_z*N_SMOD_xy*N_SMOD_z;
   return (Int_t)((((module_id*N_SMOD_xy*N_SMOD_z)
                    + submodule_id)*N_CRY_xy*N_CRY_z
-                  + crystal_id) * N_CRY_layers
-                 + layer_id);
+                   + crystal_id) * N_CRY_layers
+                   + layer_id);
 }
 
 int calculate_module_index(int gantry_id, int rsector_id, const ScannerGeometry& scannerGeometry)
@@ -358,6 +358,90 @@ get_scanner_geometry(const ScannerGeometry& scannerGeometry)
   return scanner_geometry;
 }
 
+// set some example efficiencies in the ScannerInformation object.
+void
+set_detection_efficiencies(petsird::ScannerInformation& scanner, const ScannerGeometry& scannerGeometry)
+{
+  //const auto num_types_of_modules = scanner.scanner_geometry.replicated_modules.size();
+  // only 1 type of module in the current scanner
+  //assert(num_types_of_modules == 1);
+  const petsird::TypeOfModule type_of_module{ 0 };
+  const auto num_detection_bins = petsird_helpers::get_num_detection_bins(scanner, type_of_module);
+
+  const auto& event_energy_bin_edges = scanner.event_energy_bin_edges[type_of_module];
+  const auto num_event_energy_bins = event_energy_bin_edges.NumberOfBins();
+
+  // set all detection_bin_efficiencies to 1 in this example
+  if (scanner.detection_efficiencies.detection_bin_efficiencies)
+    {
+      auto& bin_effs = (*scanner.detection_efficiencies.detection_bin_efficiencies)[type_of_module];
+      yardl::resize(bin_effs, { num_detection_bins });
+      std::fill(begin(bin_effs), end(bin_effs), 1.F);
+    }
+
+  // check if the caller wants to have module-pair stuff. If not, return.
+  if (!scanner.detection_efficiencies.module_pair_efficiencies_vectors)
+    return;
+
+  const auto& rep_module = scanner.scanner_geometry.replicated_modules[type_of_module];
+  const auto num_modules = rep_module.transforms.size();
+
+  // We will only use rotational symmetries (no translation along the axis yet)
+  // We also assume all module-pairs are in coincidence, except those with the same angle.
+  // Writing a module number as (z-position, angle):
+  //   eff((z1,a1), (z2, a2)) == eff((z1,0), (z2, abs(a2-a1)))
+  // or in linear indices
+  //   eff(z1 + NZ * a1, z2 + NZ * a2) == eff(z1, z2 + NZ * abs(a2 - a1))
+  // (coincident) SGIDs need to start from 0, so ignoring self-coincident angles
+  const unsigned int num_SGIDs = scannerGeometry.n_rsec_z * scannerGeometry.n_rsec_z * (scannerGeometry.n_rsec_xy - 1);
+  // SGID = z1 + NZ * (z2 + NZ * abs(a2 - a1) - 1)
+  const auto NZ = scannerGeometry.n_rsec_z;
+
+  auto& module_pair_SGID_LUT = (*scanner.detection_efficiencies.module_pair_sgidlut)[type_of_module][type_of_module];
+  module_pair_SGID_LUT = yardl::NDArray<int, 2>({ num_modules, num_modules });
+  for (unsigned int mod1 = 0; mod1 < num_modules; ++mod1)
+    {
+      for (unsigned int mod2 = 0; mod2 < num_modules; ++mod2)
+        {
+          const auto z1 = mod1 % NZ;
+          const auto a1 = mod1 / NZ;
+          const auto z2 = mod2 % NZ;
+          const auto a2 = mod2 / NZ;
+          if (a1 == a2)
+            {
+              module_pair_SGID_LUT(mod1, mod2) = -1;
+            }
+          else
+            {
+              module_pair_SGID_LUT(mod1, mod2) = z1 + NZ * (z2 + NZ * (std::abs(int(a2) - int(a1)) - 1));
+            }
+        }
+    }
+  // assert(module_pair_SGID_LUT).max() == num_SGIDs - 1);
+  // initialise module_pair_efficiencies
+  auto& module_pair_efficiencies_vector
+      = (*scanner.detection_efficiencies.module_pair_efficiencies_vectors)[type_of_module][type_of_module];
+  // assign an empty vector first, and reserve correct size
+  module_pair_efficiencies_vector = petsird::ModulePairEfficienciesVector();
+  module_pair_efficiencies_vector.reserve(num_SGIDs);
+
+  const auto& detecting_elements = rep_module.object.detecting_elements;
+  const auto num_det_els_in_module = detecting_elements.transforms.size();
+  const auto num_detection_bins_in_module = num_det_els_in_module * num_event_energy_bins;
+  for (unsigned int SGID = 0; SGID < num_SGIDs; ++SGID)
+    {
+      // extract first module_pair for this SGID. However, as this currently unused, it is commented out
+      // const auto& module_pair = *std::find(module_pair_SGID_LUT.begin(), module_pair_SGID_LUT.end(), SGID);
+      petsird::ModulePairEfficiencies module_pair_efficiencies;
+      module_pair_efficiencies.values = yardl::NDArray<float, 2>({ num_detection_bins_in_module, num_detection_bins_in_module });
+      // give some (non-physical) value
+      module_pair_efficiencies.values.fill(1.F);
+      module_pair_efficiencies.sgid = SGID;
+      module_pair_efficiencies_vector.emplace_back(module_pair_efficiencies);
+      assert(module_pair_efficiencies_vector.size() == unsigned(SGID + 1));
+    }
+}
+
 petsird::ScannerInformation
 get_scanner_info(const ScannerGeometry& scannerGeometry)
 {
@@ -373,8 +457,8 @@ get_scanner_info(const ScannerGeometry& scannerGeometry)
   // Pre-allocate various structures to have the correct size for num_types_of_modules
   // (We will still have to set descent values into each of these.)
   petsird_helpers::create::initialize_scanner_information_dimensions(scanner_info, num_types_of_modules,
-                                                                     /* allocate_detection_bin_efficiencies = */ false,
-                                                                     /* allocate_module_pair_efficiencies = */ false);
+                                                                     /* allocate_detection_bin_efficiencies = */ true,
+                                                                     /* allocate_module_pair_efficiencies = */ true);
 
   // TODO scanner_info.bulk_materials
 
@@ -411,6 +495,8 @@ get_scanner_info(const ScannerGeometry& scannerGeometry)
     all_event_energy_bin_edges[type_of_module] = event_energy_bin_edges;
     all_event_energy_resolutions[type_of_module] = scannerGeometry.EnergyResolutionAt511;    // as fraction of 511 (e.g. 0.11F)
   }
+	
+  set_detection_efficiencies(scanner_info, scannerGeometry);
 
   // TODO scanner_info.coincidence_policy = petsird::CoincidencePolicy::kRejectMultiples;
   scanner_info.delayed_coincidences_are_stored = false;
