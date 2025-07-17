@@ -13,7 +13,7 @@
 //  *********************************************************************
 //
 //######################################################################################
-//# Authors   : Nicolas A Karakatsanis, Kris Thielemans, Michael Hansen                #
+//# Authors: Nicolas A Karakatsanis, Kris Thielemans, Michael Hansen, Hideaki Tashima  #
 //#                                                                                    #
 //# Date  23-NOV-2023 - July 2025                                                      #
 //#                                                                                    #
