@@ -522,6 +522,7 @@ ReadNormalizationFactorFile(petsird::ScannerInformation& scanner, const ScannerG
      && fin.read(reinterpret_cast<char*>(&global_element_index1), sizeof(int32_t))
      && fin.read(reinterpret_cast<char*>(&global_element_index2), sizeof(int32_t)))
     {
+      if (value!=0) value=1./value; //invert norm correction factors to convert to detection efficiencies
       //printf("%f, %d, %d\n", value, global_element_index1, global_element_index2);
       unsigned int rsec_z_id1, rsec_xy_id1, mod_z_id1, mod_xy_id1, smod_z_id1, smod_xy_id1, cry_xy_id1, cry_z_id1, layer_id1;
       calculate_scanner_layer_xyz_coordinates (global_element_index1, 
