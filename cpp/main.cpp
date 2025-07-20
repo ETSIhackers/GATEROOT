@@ -60,6 +60,7 @@ struct ScannerGeometry
   int n_det;
   int s_width;
   */
+  string model_name;
   int n_rsec_xy;
   int n_rsec_z;
   int n_mod_xy;
@@ -111,6 +112,7 @@ void WriteScannerGeometry(const ScannerGeometry& scanner_geometry, const std::st
   j["n_det"] = scanner_geometry.n_det;
   j["s_width"] = scanner_geometry.s_width;
   */
+  j["model_name"] = scanner_geometry.model_name;
   j["n_rsec_xy"] = scanner_geometry.n_rsec_xy;
   j["n_rsec_z"] = scanner_geometry.n_rsec_z;
   j["n_mod_xy"] = scanner_geometry.n_mod_xy;
@@ -182,6 +184,7 @@ ScannerGeometry ReadScannerGeometry(const std::string& filename)
   scanner_geometry.n_det = get_value(j, "n_det");
   scanner_geometry.s_width = get_value(j, "s_width");
   */
+  scanner_geometry.model_name = get_value(j, "model_name");
   scanner_geometry.n_rsec_xy = get_value(j, "n_rsec_xy");
   scanner_geometry.n_rsec_z = get_value(j, "n_rsec_z");
   scanner_geometry.n_mod_xy = get_value(j, "n_mod_xy");
@@ -601,7 +604,7 @@ get_scanner_info(const ScannerGeometry& scannerGeometry)
   const float energy_ULD =scannerGeometry.energy_ULD;
 
   petsird::ScannerInformation scanner_info;
-  scanner_info.model_name = "PETSIRD_GATEROOT"; // TODO
+  scanner_info.model_name = scannerGeometry.model_name; // "PETSIRD_GATEROOT"
 
   const auto num_types_of_modules = 1;
   // Pre-allocate various structures to have the correct size for num_types_of_modules
