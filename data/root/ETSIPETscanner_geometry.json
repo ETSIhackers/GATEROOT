@@ -1,4 +1,5 @@
 {
+  "model_name": "ETSIPETscanner1",
   "ax_phys_crystal_num": 5,
   "ax_virtual_crystal_num": 0,
   "n_cry_layers": 1,
