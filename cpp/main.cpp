@@ -271,12 +271,12 @@ int calculate_element_index(int module_id, int submodule_id, int crystal_id, int
                    + layer_id);
 }
 
-void calculate_scanner_layer_xyz_coordinates(int global_element_index,
-                                            unsigned int& rsec_z_id, unsigned int& rsec_xy_id,  
+void calculate_scanner_layer_xyz_coordinates(unsigned int& rsec_z_id, unsigned int& rsec_xy_id,  
                                             unsigned int& mod_z_id, unsigned int& mod_xy_id,
                                             unsigned int& smod_z_id, unsigned int& smod_xy_id,
                                             unsigned int& cry_xy_id, unsigned int& cry_z_id,
                                             unsigned int& layer_id,
+                                            unsigned int global_element_index,
                                             const ScannerGeometry& scannerGeometry)
 {
   rsec_z_id = ( global_element_index / (scannerGeometry.n_rsec_xy*scannerGeometry.n_mod_xy*scannerGeometry.n_smod_xy*scannerGeometry.n_cry_xy*scannerGeometry.n_cry_layers)
@@ -484,7 +484,7 @@ set_detection_efficiencies(petsird::ScannerInformation& scanner, const ScannerGe
 }
 
 void
-ReadNormalizationFactorFile(petsird::ScannerInformation& scanner, const ScannerGeometry& scannerGeometry, const string& filename)
+SetEfficienciesFromFile(petsird::ScannerInformation& scanner, const ScannerGeometry& scannerGeometry, const string& filename)
 {
   const petsird::TypeOfModule type_of_module{ 0 };
 
@@ -514,34 +514,34 @@ ReadNormalizationFactorFile(petsird::ScannerInformation& scanner, const ScannerG
   std::ifstream fin(filename, std::ios::binary);
   if (!fin) {
     std::cerr << "Failed to open normalization file!\n" << std::endl;
-    return;
+    exit(1);
   }
-  std::cout << "Reading of the normalization file ..." << std::endl;
+  std::cout << "Reading of the normalization file ...";
   while (fin) {
     float value;
-    int32_t global_element_index1;
-    int32_t global_element_index2;
+    uint32_t global_element_index1;
+    uint32_t global_element_index2;
     if (fin.read(reinterpret_cast<char*>(&value), sizeof(float))
-     && fin.read(reinterpret_cast<char*>(&global_element_index1), sizeof(int32_t))
-     && fin.read(reinterpret_cast<char*>(&global_element_index2), sizeof(int32_t)))
+     && fin.read(reinterpret_cast<char*>(&global_element_index1), sizeof(uint32_t))
+     && fin.read(reinterpret_cast<char*>(&global_element_index2), sizeof(uint32_t)))
     {
       if (value!=0) value=1./value; //invert norm correction factors to convert to detection efficiencies
       //printf("%f, %d, %d\n", value, global_element_index1, global_element_index2);
       unsigned int rsec_z_id1, rsec_xy_id1, mod_z_id1, mod_xy_id1, smod_z_id1, smod_xy_id1, cry_xy_id1, cry_z_id1, layer_id1;
-      calculate_scanner_layer_xyz_coordinates (global_element_index1, 
-                                              rsec_z_id1, rsec_xy_id1,
+      calculate_scanner_layer_xyz_coordinates (rsec_z_id1, rsec_xy_id1,
                                               mod_z_id1, mod_xy_id1, 
                                               smod_z_id1, smod_xy_id1,
                                               cry_xy_id1, cry_z_id1,
                                               layer_id1,
+	                                      global_element_index1,
                                               scannerGeometry);
       unsigned int rsec_z_id2, rsec_xy_id2, mod_z_id2, mod_xy_id2, smod_z_id2, smod_xy_id2, cry_xy_id2, cry_z_id2, layer_id2;
-      calculate_scanner_layer_xyz_coordinates (global_element_index2,
-                                              rsec_z_id2, rsec_xy_id2,
+      calculate_scanner_layer_xyz_coordinates (rsec_z_id2, rsec_xy_id2,
                                               mod_z_id2, mod_xy_id2,
                                               smod_z_id2, smod_xy_id2,
                                               cry_xy_id2, cry_z_id2,
                                               layer_id2,
+	                                      global_element_index2,
                                               scannerGeometry);
       unsigned int rsec_id1, mod_id1, smod_id1, cry_id1;
       calculate_scanner_layer_coordinates(rsec_z_id1, rsec_xy_id1, rsec_id1,
@@ -576,7 +576,7 @@ ReadNormalizationFactorFile(petsird::ScannerInformation& scanner, const ScannerG
       }
     }
   }
-  printf("completed.\n"); fflush(stdout);
+  std::cout << "completed." << std::endl;
   
   auto& module_pair_efficiencies_vector
       = (*scanner.detection_efficiencies.module_pair_efficiencies_vectors)[type_of_module][type_of_module];
@@ -872,7 +872,7 @@ int main(int argc, char** argv)
   header.scanner = get_scanner_info(scannerGeometry);
 
   if (normalization_file != "") {
-    ReadNormalizationFactorFile(header.scanner, scannerGeometry, normalization_file);
+    SetEfficienciesFromFile(header.scanner, scannerGeometry, normalization_file);
   }
 	
   auto& scanner = header.scanner;
