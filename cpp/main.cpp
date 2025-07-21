@@ -596,7 +596,7 @@ SetEfficienciesFromFile(petsird::ScannerInformation& scanner, const ScannerGeome
 }
 
 petsird::ScannerInformation
-get_scanner_info(const ScannerGeometry& scannerGeometry)
+get_scanner_info(const ScannerGeometry& scannerGeometry, bool store_det_efficiencies)
 {
   const unsigned long NUMBER_OF_TOF_BINS = static_cast<unsigned long>(scannerGeometry.number_of_TOF_bins);
   const unsigned long NUMBER_OF_EVENT_ENERGY_BINS = static_cast<unsigned long>(scannerGeometry.number_of_energy_bins);
@@ -610,8 +610,8 @@ get_scanner_info(const ScannerGeometry& scannerGeometry)
   // Pre-allocate various structures to have the correct size for num_types_of_modules
   // (We will still have to set descent values into each of these.)
   petsird_helpers::create::initialize_scanner_information_dimensions(scanner_info, num_types_of_modules,
-                                                                     /* allocate_detection_bin_efficiencies = */ true,
-                                                                     /* allocate_module_pair_efficiencies = */ true);
+                                                                     /* allocate_detection_bin_efficiencies = */ store_det_efficiencies,
+                                                                     /* allocate_module_pair_efficiencies = */ store_det_efficiencies);
 
   // TODO scanner_info.bulk_materials
 
@@ -648,8 +648,9 @@ get_scanner_info(const ScannerGeometry& scannerGeometry)
     all_event_energy_bin_edges[type_of_module] = event_energy_bin_edges;
     all_event_energy_resolutions[type_of_module] = scannerGeometry.EnergyResolutionAt511;    // as fraction of 511 (e.g. 0.11F)
   }
-	
-  set_detection_efficiencies(scanner_info, scannerGeometry); // initialize all valid efficiencies with the value of 1
+
+  if (store_det_efficiencies)
+    set_detection_efficiencies(scanner_info, scannerGeometry); // initialize all valid efficiencies with the value of 1
 
   // TODO scanner_info.coincidence_policy = petsird::CoincidencePolicy::kRejectMultiples;
   scanner_info.delayed_coincidences_are_stored = false;
@@ -723,6 +724,7 @@ int main(int argc, char** argv)
   std::string petsird_file;
   int number_of_root_files = 2;
   bool verbose = false;
+  bool store_det_efficiencies = true;
 
   // Parse command line args:
   for (int i = 1; i < argc; ++i) {
@@ -760,6 +762,9 @@ int main(int argc, char** argv)
     return 1;
   }
 
+  if (normalization_file.empty()) {
+    store_det_efficiencies=false;
+  }
   // Print arguments and exit
   std::cout << "root_prefix: " << root_prefix << std::endl;
   std::cout << "scanner_geometry_file: " << scanner_geometry_file << std::endl;
@@ -869,9 +874,9 @@ int main(int argc, char** argv)
 
   // Output PETSIRD
   petsird::Header header;
-  header.scanner = get_scanner_info(scannerGeometry);
+  header.scanner = get_scanner_info(scannerGeometry, store_det_efficiencies);
 
-  if (normalization_file != "") {
+  if (store_det_efficiencies) {
     SetEfficienciesFromFile(header.scanner, scannerGeometry, normalization_file);
   }
 	
