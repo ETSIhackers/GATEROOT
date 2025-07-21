@@ -516,7 +516,7 @@ ReadNormalizationFactorFile(petsird::ScannerInformation& scanner, const ScannerG
     std::cerr << "Failed to open normalization file!\n" << std::endl;
     return;
   }
-  printf("Reading of the normalization file ..."); fflush(stdout);
+  std::cout << "Reading of the normalization file ..." << std::endl;
   while (fin) {
     float value;
     int32_t global_element_index1;
