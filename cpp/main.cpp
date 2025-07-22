@@ -61,23 +61,23 @@ struct ScannerGeometry
   int s_width;
   */
   string model_name;
-  int n_rsec_xy;
-  int n_rsec_z;
-  int n_mod_xy;
-  int n_mod_z;
-  int n_smod_xy;
-  int n_smod_z;
-  int n_cry_xy;
-  int n_cry_z;
-  int n_cry_layers;
-  int cry_ax_gap;
-  int cry_tx_gap;
-  int smod_ax_gap;
-  int smod_tx_gap;
-  int mod_ax_gap;
-  int mod_tx_gap;
-  int rsec_ax_gap;
-  int rsec_tx_gap;
+  unsigned int n_rsec_xy;
+  unsigned int n_rsec_z;
+  unsigned int n_mod_xy;
+  unsigned int n_mod_z;
+  unsigned int n_smod_xy;
+  unsigned int n_smod_z;
+  unsigned int n_cry_xy;
+  unsigned int n_cry_z;
+  unsigned int n_cry_layers;
+  unsigned int cry_ax_gap;
+  unsigned int cry_tx_gap;
+  unsigned int smod_ax_gap;
+  unsigned int smod_tx_gap;
+  unsigned int mod_ax_gap;
+  unsigned int mod_tx_gap;
+  unsigned int rsec_ax_gap;
+  unsigned int rsec_tx_gap;
   /* future expansion
   int max_d_ring;
   */
@@ -249,23 +249,23 @@ void usage()
   std::cout << "  -h, --help                                  Print this help message" << std::endl;
 }
 
-int calculate_element_index(int module_id, int submodule_id, int crystal_id, int layer_id, const ScannerGeometry& scannerGeometry)
+unsigned int calculate_element_index(unsigned int module_id, unsigned int submodule_id, unsigned int crystal_id, unsigned int layer_id, const ScannerGeometry& scannerGeometry)
 {
   //int N_DET = scannerGeometry.n_det;
   //int N_MOD_xy = scannerGeometry.n_mod_xy;
   //int N_MOD_z = scannerGeometry.n_mod_z;
-  int N_SMOD_xy = scannerGeometry.n_smod_xy;
-  int N_SMOD_z = scannerGeometry.n_smod_z;
-  int N_CRY_xy = scannerGeometry.n_cry_xy;
-  int N_CRY_z = scannerGeometry.n_cry_z;
-  int N_CRY_layers = scannerGeometry.n_cry_layers;
+  unsigned int N_SMOD_xy = scannerGeometry.n_smod_xy;
+  unsigned int N_SMOD_z = scannerGeometry.n_smod_z;
+  unsigned int N_CRY_xy = scannerGeometry.n_cry_xy;
+  unsigned int N_CRY_z = scannerGeometry.n_cry_z;
+  unsigned int N_CRY_layers = scannerGeometry.n_cry_layers;
 
   // NK code
   // return (Int_t)(layer_id)
   //            + (Int_t)(crystal_id/N_CRY_xy + (crystal_id%N_CRY_xy)*N_CRY_z)*N_CRY_layers
   //            + (Int_t)(submodule_id/N_SMOD_xy + (submodule_id%N_SMOD_xy)*N_SMOD_z)*N_CRY_layers*N_CRY_xy*N_CRY_z
   //            + (Int_t)(module_id/N_MOD_xy + (module_id%N_MOD_xy)*N_MOD_z)*N_CRY_layers*N_CRY_xy*N_CRY_z*N_SMOD_xy*N_SMOD_z;
-  return (Int_t)((((module_id*N_SMOD_xy*N_SMOD_z)
+  return (UInt_t)((((module_id*N_SMOD_xy*N_SMOD_z)
                    + submodule_id)*N_CRY_xy*N_CRY_z
                    + crystal_id) * N_CRY_layers
                    + layer_id);
@@ -308,15 +308,15 @@ void calculate_scanner_layer_coordinates(unsigned int rsec_z_id, unsigned int rs
   cry_id = cry_xy_id + cry_z_id*scannerGeometry.n_cry_xy;
 }
 
-int calculate_module_index(int gantry_id, int rsector_id, const ScannerGeometry& scannerGeometry)
+unsigned int calculate_module_index(unsigned int gantry_id, unsigned int rsector_id, const ScannerGeometry& scannerGeometry)
 {
-  const int N_RSEC_xy = scannerGeometry.n_rsec_xy;
-  const int N_RSEC_z = scannerGeometry.n_rsec_z;
+  const unsigned int N_RSEC_xy = scannerGeometry.n_rsec_xy;
+  const unsigned int N_RSEC_z = scannerGeometry.n_rsec_z;
 
   // NK code
   // return (Int_t)(rsector_id/N_RSEC_xy + (rsector_id%N_RSEC_xy)*N_RSEC_z)
   //           + (Int_t)(gantry_id)*N_RSEC_xy*N_RSEC_z;
-  return (Int_t)(gantry_id)*N_RSEC_z*N_RSEC_xy + (Int_t)rsector_id;
+  return (UInt_t)(gantry_id)*N_RSEC_z*N_RSEC_xy + (UInt_t)rsector_id;
 }
 
 //! return a cuboid volume
@@ -345,13 +345,13 @@ get_detector_module(const ScannerGeometry& scannerGeometry)
   petsird::ReplicatedBoxSolidVolume rep_volume;
   {
     rep_volume.object = get_crystal(scannerGeometry);
-    for (int rep_mod_z = 0; rep_mod_z < scannerGeometry.n_mod_z; ++rep_mod_z)
-      for (int rep_mod_xy = 0; rep_mod_xy < scannerGeometry.n_mod_xy; ++rep_mod_xy)
-        for (int rep_smod_z = 0; rep_smod_z < scannerGeometry.n_smod_z; ++rep_smod_z)
-          for (int rep_smod_xy = 0; rep_smod_xy < scannerGeometry.n_smod_xy; ++rep_smod_xy)
-            for (int rep_cry_z = 0; rep_cry_z < scannerGeometry.n_cry_z; ++rep_cry_z)
-              for (int rep_cry_xy = 0; rep_cry_xy < scannerGeometry.n_cry_xy; ++rep_cry_xy)
-                  for (int rep_cry_layer = 0; rep_cry_layer < scannerGeometry.n_cry_layers; ++rep_cry_layer)
+    for (unsigned int rep_mod_z = 0; rep_mod_z < scannerGeometry.n_mod_z; ++rep_mod_z)
+      for (unsigned int rep_mod_xy = 0; rep_mod_xy < scannerGeometry.n_mod_xy; ++rep_mod_xy)
+        for (unsigned int rep_smod_z = 0; rep_smod_z < scannerGeometry.n_smod_z; ++rep_smod_z)
+          for (unsigned int rep_smod_xy = 0; rep_smod_xy < scannerGeometry.n_smod_xy; ++rep_smod_xy)
+            for (unsigned int rep_cry_z = 0; rep_cry_z < scannerGeometry.n_cry_z; ++rep_cry_z)
+              for (unsigned int rep_cry_xy = 0; rep_cry_xy < scannerGeometry.n_cry_xy; ++rep_cry_xy)
+                  for (unsigned int rep_cry_layer = 0; rep_cry_layer < scannerGeometry.n_cry_layers; ++rep_cry_layer)
                     {
                       petsird::RigidTransformation transform{ { { 1.F, 0.F, 0.F, scannerGeometry.radius + rep_cry_layer * scannerGeometry.detector_x_dim + scannerGeometry.detector_x_dim/2 },
                                                                 { 0.F, 1.F, 0.F, (rep_mod_xy - scannerGeometry.n_mod_xy / 2 + ((scannerGeometry.n_mod_xy - 1) % 2 ) * 0.5F) * scannerGeometry.n_smod_xy * scannerGeometry.n_cry_xy * scannerGeometry.detector_y_dim
@@ -379,13 +379,13 @@ get_scanner_geometry(const ScannerGeometry& scannerGeometry)
   {
     rep_module.object = get_detector_module(scannerGeometry);
     std::vector<float> angles;
-    for (int i = 0; i < scannerGeometry.n_rsec_xy; ++i)
+    for (unsigned int i = 0; i < scannerGeometry.n_rsec_xy; ++i)
       {
         angles.push_back(static_cast<float>((2 * M_PI * i) / scannerGeometry.n_rsec_xy));
       }
 
     for (auto angle : angles)
-      for (int rep_rsec_z = 0; rep_rsec_z < scannerGeometry.n_rsec_z; ++rep_rsec_z)
+      for (unsigned int rep_rsec_z = 0; rep_rsec_z < scannerGeometry.n_rsec_z; ++rep_rsec_z)
         {
           petsird::RigidTransformation transform{ { { std::cos(angle), -std::sin(angle), 0.F, 0.F },
                                                     { std::sin(angle), std::cos(angle), 0.F, 0.F},
@@ -580,7 +580,7 @@ SetEfficienciesFromFile(petsird::ScannerInformation& scanner, const ScannerGeome
   
   auto& module_pair_efficiencies_vector
       = (*scanner.detection_efficiencies.module_pair_efficiencies_vectors)[type_of_module][type_of_module];
-  for (unsigned int SGID=0; SGID < num_SGIDs; ++SGID) {
+  for (int SGID=0; SGID < num_SGIDs; ++SGID) {
     for (unsigned int detection_bin1=0; detection_bin1<num_detection_bins_in_module; ++detection_bin1) {
       for (unsigned int detection_bin2=0; detection_bin2<num_detection_bins_in_module; ++detection_bin2) {
         if (count_components(SGID, detection_bin1, detection_bin2)>0) {
