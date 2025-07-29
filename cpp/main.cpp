@@ -74,7 +74,7 @@ struct ScannerGeometry
   int cry_tx_gap;
   int smod_ax_gap;
   int smod_tx_gap;
-  unt mod_ax_gap;
+  int mod_ax_gap;
   int mod_tx_gap;
   int rsec_ax_gap;
   int rsec_tx_gap;
@@ -317,7 +317,7 @@ void calculate_scanner_layer_coordinates(unsigned int& rsec_id, unsigned int& mo
   cry_id = cry_z_id + cry_xy_id*scannerGeometry.n_cry_z;	
 }
 
-unsigned int calculate_module_index(unsigned int gantry_id, unsigned int rsector_id, const ScannerGeometry& scannerGeometry)
+int calculate_module_index(unsigned int gantry_id, unsigned int rsector_id, const ScannerGeometry& scannerGeometry)
 {
   const int N_RSEC_xy = scannerGeometry.n_rsec_xy;
   const int N_RSEC_z = scannerGeometry.n_rsec_z;
