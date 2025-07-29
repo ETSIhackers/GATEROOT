@@ -296,7 +296,7 @@ void calculate_scanner_layer_xyz_coordinates(unsigned int& rsec_z_id, unsigned i
   layer_id = global_element_index % scannerGeometry.n_cry_layers;
 }
 
-void calculate_scanner_layer_coordinates(unsigned int& rsec_id, unsigned int& mod_id, unsigned int& smod_id, unsigned int& cry_id
+void calculate_scanner_layer_coordinates(unsigned int& rsec_id, unsigned int& mod_id, unsigned int& smod_id, unsigned int& cry_id,
                                          unsigned int rsec_z_id, unsigned int rsec_xy_id, 
                                          unsigned int mod_z_id, unsigned int mod_xy_id, 
                                          unsigned int smod_z_id, unsigned int smod_xy_id, 
@@ -388,7 +388,7 @@ get_scanner_geometry(const ScannerGeometry& scannerGeometry)
   {
     rep_module.object = get_detector_module(scannerGeometry);
     std::vector<float> angles;
-    for (unsigned int i = 0; i < scannerGeometry.n_rsec_xy; ++i)
+    for (int i = 0; i < scannerGeometry.n_rsec_xy; ++i)
       {
         angles.push_back(static_cast<float>((2 * M_PI * i) / scannerGeometry.n_rsec_xy));
       }
@@ -591,7 +591,7 @@ SetEfficienciesFromFile(petsird::ScannerInformation& scanner, const ScannerGeome
   
   auto& module_pair_efficiencies_vector
       = (*scanner.detection_efficiencies.module_pair_efficiencies_vectors)[type_of_module][type_of_module];
-  for (int SGID=0; SGID < num_SGIDs; ++SGID) {
+  for (unsigned int SGID=0; SGID < num_SGIDs; ++SGID) {
     for (unsigned int detection_bin1=0; detection_bin1<num_detection_bins_in_module; ++detection_bin1) {
       for (unsigned int detection_bin2=0; detection_bin2<num_detection_bins_in_module; ++detection_bin2) {
         if (count_components(SGID, detection_bin1, detection_bin2)>0) {
