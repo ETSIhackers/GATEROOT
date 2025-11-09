@@ -41,9 +41,9 @@
 #include <nlohmann/json.hpp>
 
 // PETSIRD Includes
-#include "protocols.h"
-#include "types.h"
-#include "binary/protocols.h"
+#include "petsird/protocols.h"
+//#include "types.h"
+#include "petsird/binary/protocols.h"
 #include "petsird_helpers/create.h"
 #include "petsird_helpers/geometry.h"
 
@@ -664,7 +664,7 @@ get_scanner_info(const ScannerGeometry& scannerGeometry, bool store_det_efficien
     set_detection_efficiencies(scanner_info, scannerGeometry); // initialize all valid efficiencies with the value of 1
 
   // TODO scanner_info.coincidence_policy = petsird::CoincidencePolicy::kRejectMultiples;
-  scanner_info.delayed_coincidences_are_stored = false;
+  scanner_info.delayed_events_are_stored = false;
   scanner_info.triple_events_are_stored = false;
   return scanner_info;
 }
