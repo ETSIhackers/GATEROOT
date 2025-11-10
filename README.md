@@ -8,7 +8,7 @@ This repository implements a convertor from output of [GATE](https://opengate.re
 
 ## Version information
 
-This compiles with PETSIRD v0.7.2.
+This compiles with PETSIRD v0.8.0.
 
 ## Installation instructions
 1. Get the software
