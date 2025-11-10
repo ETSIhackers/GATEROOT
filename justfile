@@ -113,10 +113,10 @@ default: run
 
 #@run: run_ONLY_ALLmin_mIEC
 #@run: run_ONLY_ALLmin_voxBrain
-#@run: run_ONLY_ALLmin_ALLphantoms
+@run: run_ONLY_ALLmin_ALLphantoms
 
 #@run: run_ONLY_Norm_ETSIPETscanner1
-@run: run_ONLY_Norm_ETSIPETscanner2
+#@run: run_ONLY_Norm_ETSIPETscanner2
 #run: run_ONLY_Norm_ALLscanners
 
 # Build and run
