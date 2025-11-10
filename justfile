@@ -48,7 +48,7 @@ default: run
 
 
 @run_ONLY_0min_mIEC: 
-    cpp/build/root_to_petsird --root-prefix ../ROOT_files/IEC/ETSIPETscanner_mIEC_ --number-of-root-files 0 --petsird-file petsird_ETSIPETscanner_realNorm_mIEC_0min_v{{version}}.pertsird -s data/root/ETSIPETscanner_geometry.json -c ../NORM_files/Sino_NCFs_ETSIPETscanner_span1_mrd39_df.Cdf
+    cpp/build/root_to_petsird --root-prefix ../ROOT_files/IEC/ETSIPETscanner_mIEC_ --number-of-root-files 0 --petsird-file petsird_ETSIPETscanner_realNorm_mIEC_0min_v{{version}}.petsird -s data/root/ETSIPETscanner_geometry.json -c ../NORM_files/Sino_NCFs_ETSIPETscanner_span1_mrd39_df.Cdf
 
 @run_ONLY_10sec_mIEC:
     cpp/build/root_to_petsird --root-prefix ../ROOT_files/IEC/ETSIPETscanner_mIEC_ --number-of-root-files 1 --petsird-file petsird_ETSIPETscanner_realNorm_mIEC_10sec_v{{version}}.petsird -s data/root/ETSIPETscanner_geometry.json -c ../NORM_files/Sino_NCFs_ETSIPETscanner_span1_mrd39_df.Cdf
