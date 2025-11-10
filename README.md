@@ -33,7 +33,7 @@ As we use a PETSIRD submodule, you have to take this into account
 
 - update the code as follows
   ```sh
-  git pull origin main
+  git pull
   git submodule update --init
   ```
 - update your conda environment
