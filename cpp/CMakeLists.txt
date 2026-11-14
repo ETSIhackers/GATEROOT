@@ -1,5 +1,5 @@
-cmake_minimum_required(VERSION 3.12.0) # older would work, but could give warnings on policy CMP0074
-project(root_to_petsird VERSION 0.4.0)
+cmake_minimum_required(VERSION 3.20.0) # older would work, but could give warnings on policy CMP0074
+project(root_to_petsird VERSION 0.5.0)
 
 set(CMAKE_CXX_STANDARD 17)
 
@@ -16,14 +16,11 @@ else()
   add_compile_options(-Wall -Wextra -pedantic)
 endif()
 
-set(PETSIRD_dir ../PETSIRD/cpp/)
-add_subdirectory(${PETSIRD_dir} petsird)
-
-find_package(ROOT REQUIRED COMPONENTS Tree)
+find_package(PETSIRD 0.13 REQUIRED CONFIG)
+find_package(ROOT REQUIRED CONFIG COMPONENTS Tree)
 
 add_executable(root_to_petsird main.cpp)
-target_include_directories(root_to_petsird PUBLIC ${PETSIRD_dir})
 # needed for helpers
-target_link_libraries(root_to_petsird PUBLIC petsird_helpers)
+target_link_libraries(root_to_petsird PUBLIC PETSIRD::helpers)
 target_link_libraries(root_to_petsird PUBLIC ROOT::Tree)
 install(TARGETS root_to_petsird DESTINATION bin)

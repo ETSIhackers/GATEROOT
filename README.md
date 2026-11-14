@@ -8,7 +8,7 @@ This repository implements a convertor from output of [GATE](https://opengate.re
 
 ## Version information
 
-This compiles with PETSIRD v0.8.0.
+This compiles with PETSIRD v0.13.1
 
 ## Installation instructions
 1. Get the software
@@ -20,21 +20,19 @@ This compiles with PETSIRD v0.8.0.
    conda env create -f environment.yml
    conda activate GATEROOT
    ```
-3. Install yardl 0.6.3 and add it to your path
-
-4. Build
+3. Build
    ```sh
    just build
    ```
 
 ### Updating from a previous version
 
-As we use a PETSIRD submodule, you have to take this into account
+Note: we no longer use PETSIRD as a submodule. Please use the `libpetsird` conda-forge package
+(which will be installed if you follow the above instructions).
 
 - update the code as follows
   ```sh
   git pull
-  git submodule update --init
   ```
 - update your conda environment
 
