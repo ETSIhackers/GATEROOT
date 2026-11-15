@@ -578,11 +578,13 @@ SetEfficienciesFromFile(petsird::ScannerInformation& scanner, const ScannerGeome
       unsigned int element_id_in_module1 = calculate_element_index(mod_id1, smod_id1, cry_id1, layer_id1, scannerGeometry);
       unsigned int element_id_in_module2 = calculate_element_index(mod_id2, smod_id2, cry_id2, layer_id2, scannerGeometry);
       // the LUT is lower-triangular: put the pair in the order [larger module][smaller module]
+      int SGID;
       if (rsec_id1 < rsec_id2) {
-        std::swap(rsec_id1, rsec_id2);
-        std::swap(element_id_in_module1, element_id_in_module2);
+         SGID = module_pair_SGID_LUT[rsec_id2][rsec_id1];
       }
-      int SGID = module_pair_SGID_LUT[rsec_id1][rsec_id2];
+      else {
+        SGID = module_pair_SGID_LUT[rsec_id1][rsec_id2];
+       }
       //printf("SGID=%d, rsec_id1=%d, rsec_id2=%d\n", SGID, rsec_id1, rsec_id2);
 
       if (SGID>=0) {
