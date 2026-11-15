@@ -14,6 +14,10 @@ default: run
     cd cpp/build; \
     ninja
 
+# convert the GATE simulation in test/data and check the result against the GATE ground truth
+@test: build
+    python -m pytest -v test
+
 
 #@run: build download-test-data
 #    cpp/build/root_to_petsird --root-prefix data/root/ETSIPETscanner_mIEC_ --number-of-root-files 1 --petsird-file test.petsird -s data/root/scanner_geometry.json

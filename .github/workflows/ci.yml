@@ -35,3 +35,7 @@ jobs:
           cd cpp && mkdir -p build && cd build
           cmake -G Ninja -S .. -DCMAKE_PREFIX_PATH="$CONDA_PREFIX" -DCMAKE_INSTALL_PATH="$CONDA_PREFIX"
           ninja
+
+      - name: Test conversion of GATE point sources
+        run: |
+          python -m pytest -v test

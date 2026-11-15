@@ -1,0 +1,5 @@
+# true positions of the 4 PTSRC point sources (x y z in mm, GATE world coordinates), in sourceID order
+0 -10 115.2
+120 0 0
+10 0 0
+120 0 115.2
