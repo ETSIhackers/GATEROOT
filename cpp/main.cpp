@@ -334,7 +334,7 @@ int calculate_module_index(unsigned int gantry_id, unsigned int rsector_id, cons
 petsird::BoxSolidVolume
 get_crystal(const ScannerGeometry& scannerGeometry)
 {
-  std::array<float, 3> sizes_in_mm{scannerGeometry.detector_x_dim, scannerGeometry.detector_y_dim, scannerGeometry.detector_x_dim};
+  std::array<float, 3> sizes_in_mm{scannerGeometry.detector_x_dim, scannerGeometry.detector_y_dim, scannerGeometry.detector_z_dim};
   return petsird_helpers::geometry::construct_cuboid_box(
     sizes_in_mm,
     { sizes_in_mm[0] / 2.F - scannerGeometry.average_DOI, 0.F, 0.F },
@@ -835,50 +835,56 @@ int main(int argc, char** argv)
   }
 
 
+  // Read only the branches we need. Since ROOT 6.38, TChain::SetBranchAddress no longer
+  // re-enables a disabled branch, so enable each one explicitly.
   Coincidences->SetBranchStatus("*",0);
-  Coincidences->SetBranchAddress("axialPos",&axialPos);
-  Coincidences->SetBranchAddress("comptVolName1",&comptVolName1);
-  Coincidences->SetBranchAddress("comptVolName2",&comptVolName2);
-  Coincidences->SetBranchAddress("comptonCrystal1",&compton1);
-  Coincidences->SetBranchAddress("comptonCrystal2",&compton2);
-  Coincidences->SetBranchAddress("crystalID1",&crystalID1);
-  Coincidences->SetBranchAddress("crystalID2",&crystalID2);
-  Coincidences->SetBranchAddress("comptonPhantom1",&comptonPhantom1);
-  Coincidences->SetBranchAddress("comptonPhantom2",&comptonPhantom2);
-  Coincidences->SetBranchAddress("energy1",&energy1);
-  Coincidences->SetBranchAddress("energy2",&energy2);
-  Coincidences->SetBranchAddress("eventID1",&eventID1);
-  Coincidences->SetBranchAddress("eventID2",&eventID2);
-  Coincidences->SetBranchAddress("globalPosX1",&globalPosX1);
-  Coincidences->SetBranchAddress("globalPosX2",&globalPosX2);
-  Coincidences->SetBranchAddress("globalPosY1",&globalPosY1);
-  Coincidences->SetBranchAddress("globalPosY2",&globalPosY2);
-  Coincidences->SetBranchAddress("globalPosZ1",&globalPosZ1);
-  Coincidences->SetBranchAddress("globalPosZ2",&globalPosZ2);
-  Coincidences->SetBranchAddress("layerID1",&layerID1);
-  Coincidences->SetBranchAddress("layerID2",&layerID2);
-  Coincidences->SetBranchAddress("moduleID1",&moduleID1);
-  Coincidences->SetBranchAddress("moduleID2",&moduleID2);
-  Coincidences->SetBranchAddress("rotationAngle",&rotationAngle);
-  Coincidences->SetBranchAddress("rsectorID1",&rsectorID1);
-  Coincidences->SetBranchAddress("rsectorID2",&rsectorID2);
-  Coincidences->SetBranchAddress("runID",&runID);
-  Coincidences->SetBranchAddress("sinogramS",&sinogramS);
-  Coincidences->SetBranchAddress("sinogramTheta",&sinogramTheta);
-  Coincidences->SetBranchAddress("sourceID1",&sourceID1);
-  Coincidences->SetBranchAddress("sourceID2",&sourceID2);
-  Coincidences->SetBranchAddress("sourcePosX1",&sourcePosX1);
-  Coincidences->SetBranchAddress("sourcePosX2",&sourcePosX2);
-  Coincidences->SetBranchAddress("sourcePosY1",&sourcePosY1);
-  Coincidences->SetBranchAddress("sourcePosY2",&sourcePosY2);
-  Coincidences->SetBranchAddress("sourcePosZ1",&sourcePosZ1);
-  Coincidences->SetBranchAddress("sourcePosZ2",&sourcePosZ2);
-  Coincidences->SetBranchAddress("submoduleID1",&submoduleID1);
-  Coincidences->SetBranchAddress("submoduleID2",&submoduleID2);
-  Coincidences->SetBranchAddress("time1",&time1);
-  Coincidences->SetBranchAddress("time2",&time2);
-  Coincidences->SetBranchAddress("gantryID1",&gantryID1);
-  Coincidences->SetBranchAddress("gantryID2",&gantryID2);
+  auto set_branch = [&](const char* name, auto* address) {
+    Coincidences->SetBranchStatus(name, 1);
+    Coincidences->SetBranchAddress(name, address);
+  };
+  set_branch("axialPos",&axialPos);
+  set_branch("comptVolName1",&comptVolName1);
+  set_branch("comptVolName2",&comptVolName2);
+  set_branch("comptonCrystal1",&compton1);
+  set_branch("comptonCrystal2",&compton2);
+  set_branch("crystalID1",&crystalID1);
+  set_branch("crystalID2",&crystalID2);
+  set_branch("comptonPhantom1",&comptonPhantom1);
+  set_branch("comptonPhantom2",&comptonPhantom2);
+  set_branch("energy1",&energy1);
+  set_branch("energy2",&energy2);
+  set_branch("eventID1",&eventID1);
+  set_branch("eventID2",&eventID2);
+  set_branch("globalPosX1",&globalPosX1);
+  set_branch("globalPosX2",&globalPosX2);
+  set_branch("globalPosY1",&globalPosY1);
+  set_branch("globalPosY2",&globalPosY2);
+  set_branch("globalPosZ1",&globalPosZ1);
+  set_branch("globalPosZ2",&globalPosZ2);
+  set_branch("layerID1",&layerID1);
+  set_branch("layerID2",&layerID2);
+  set_branch("moduleID1",&moduleID1);
+  set_branch("moduleID2",&moduleID2);
+  set_branch("rotationAngle",&rotationAngle);
+  set_branch("rsectorID1",&rsectorID1);
+  set_branch("rsectorID2",&rsectorID2);
+  set_branch("runID",&runID);
+  set_branch("sinogramS",&sinogramS);
+  set_branch("sinogramTheta",&sinogramTheta);
+  set_branch("sourceID1",&sourceID1);
+  set_branch("sourceID2",&sourceID2);
+  set_branch("sourcePosX1",&sourcePosX1);
+  set_branch("sourcePosX2",&sourcePosX2);
+  set_branch("sourcePosY1",&sourcePosY1);
+  set_branch("sourcePosY2",&sourcePosY2);
+  set_branch("sourcePosZ1",&sourcePosZ1);
+  set_branch("sourcePosZ2",&sourcePosZ2);
+  set_branch("submoduleID1",&submoduleID1);
+  set_branch("submoduleID2",&submoduleID2);
+  set_branch("time1",&time1);
+  set_branch("time2",&time2);
+  set_branch("gantryID1",&gantryID1);
+  set_branch("gantryID2",&gantryID2);
 
   nentries = (unsigned long long int)(Coincidences->GetEntries());
 
