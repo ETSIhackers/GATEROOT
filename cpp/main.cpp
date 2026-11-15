@@ -334,7 +334,7 @@ int calculate_module_index(unsigned int gantry_id, unsigned int rsector_id, cons
 petsird::BoxSolidVolume
 get_crystal(const ScannerGeometry& scannerGeometry)
 {
-  std::array<float, 3> sizes_in_mm{scannerGeometry.detector_x_dim, scannerGeometry.detector_y_dim, scannerGeometry.detector_x_dim};
+  std::array<float, 3> sizes_in_mm{scannerGeometry.detector_x_dim, scannerGeometry.detector_y_dim, scannerGeometry.detector_z_dim};
   return petsird_helpers::geometry::construct_cuboid_box(
     sizes_in_mm,
     { sizes_in_mm[0] / 2.F - scannerGeometry.average_DOI, 0.F, 0.F },
