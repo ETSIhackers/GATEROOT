@@ -1,0 +1,173 @@
+# Light simulation to test GATEROOT: ETSI PET scanner with 256 mm AFOV + 4 back-to-back point sources (PTSRC protocol).
+# Geometry = geometry.json (ETSIPETscanner256mmAFOV, same as Zenodo record 15930738 plus model_name)
+#   60 rsectors, modules 1x2x16, 1 submodule, crystals 1x5x5 of 20 x 3.2 x 3.2 mm, inner radius 308 mm
+# GATE 9.2 (classic digitizer syntax).
+
+/vis/disable
+/control/verbose 0
+/run/verbose 0
+/event/verbose 0
+/tracking/verbose 0
+
+/gate/geometry/setMaterialDatabase GateMaterials.db
+
+# ---------------------------------------------------------------- world
+/gate/world/geometry/setXLength 1000. mm
+/gate/world/geometry/setYLength 1000. mm
+/gate/world/geometry/setZLength 600. mm
+/gate/world/setMaterial G4_AIR
+
+# ---------------------------------------------------------------- scanner
+/gate/world/daughters/name cylindricalPET
+/gate/world/daughters/insert cylinder
+/gate/cylindricalPET/setMaterial G4_AIR
+/gate/cylindricalPET/geometry/setRmin 300. mm
+/gate/cylindricalPET/geometry/setRmax 345. mm
+/gate/cylindricalPET/geometry/setHeight 270. mm
+
+# rsector: 20 mm deep, centred at 318 mm -> crystals between 308 and 328 mm from the axis
+/gate/cylindricalPET/daughters/name rsector
+/gate/cylindricalPET/daughters/insert box
+/gate/rsector/placement/setTranslation 318. 0. 0. mm
+/gate/rsector/geometry/setXLength 20. mm
+/gate/rsector/geometry/setYLength 32. mm
+/gate/rsector/geometry/setZLength 256. mm
+/gate/rsector/setMaterial G4_AIR
+
+/gate/rsector/daughters/name module
+/gate/rsector/daughters/insert box
+/gate/module/geometry/setXLength 20. mm
+/gate/module/geometry/setYLength 16. mm
+/gate/module/geometry/setZLength 16. mm
+/gate/module/setMaterial G4_AIR
+
+/gate/module/daughters/name submodule
+/gate/module/daughters/insert box
+/gate/submodule/geometry/setXLength 20. mm
+/gate/submodule/geometry/setYLength 16. mm
+/gate/submodule/geometry/setZLength 16. mm
+/gate/submodule/setMaterial G4_AIR
+
+/gate/submodule/daughters/name crystal
+/gate/submodule/daughters/insert box
+/gate/crystal/geometry/setXLength 20. mm
+/gate/crystal/geometry/setYLength 3.2 mm
+/gate/crystal/geometry/setZLength 3.2 mm
+/gate/crystal/setMaterial G4_AIR
+
+/gate/crystal/daughters/name LYSO
+/gate/crystal/daughters/insert box
+/gate/LYSO/geometry/setXLength 20. mm
+/gate/LYSO/geometry/setYLength 3.2 mm
+/gate/LYSO/geometry/setZLength 3.2 mm
+/gate/LYSO/setMaterial LYSO
+
+# repeaters
+/gate/crystal/repeaters/insert cubicArray
+/gate/crystal/cubicArray/setRepeatNumberX 1
+/gate/crystal/cubicArray/setRepeatNumberY 5
+/gate/crystal/cubicArray/setRepeatNumberZ 5
+/gate/crystal/cubicArray/setRepeatVector 0. 3.2 3.2 mm
+
+/gate/module/repeaters/insert cubicArray
+/gate/module/cubicArray/setRepeatNumberX 1
+/gate/module/cubicArray/setRepeatNumberY 2
+/gate/module/cubicArray/setRepeatNumberZ 16
+/gate/module/cubicArray/setRepeatVector 0. 16. 16. mm
+
+/gate/rsector/repeaters/insert ring
+/gate/rsector/ring/setRepeatNumber 60
+
+/gate/systems/cylindricalPET/rsector/attach rsector
+/gate/systems/cylindricalPET/module/attach module
+/gate/systems/cylindricalPET/submodule/attach submodule
+/gate/systems/cylindricalPET/crystal/attach crystal
+/gate/systems/cylindricalPET/layer0/attach LYSO
+/gate/LYSO/attachCrystalSD
+
+# ---------------------------------------------------------------- physics
+/gate/physics/addPhysicsList emstandard_opt4
+/gate/physics/Gamma/SetCutInRegion world 1. mm
+/gate/physics/Electron/SetCutInRegion world 1. mm
+
+# statistics: number of simulated events and tracks
+/gate/actor/addActor SimulationStatisticActor stat
+/gate/actor/stat/save output/stat.txt
+
+/gate/run/initialize
+
+# ---------------------------------------------------------------- digitizer
+# no readout: every crystal is read out on its own
+/gate/digitizer/Singles/insert adder
+/gate/digitizer/Singles/insert blurring
+/gate/digitizer/Singles/blurring/setResolution 0.11
+/gate/digitizer/Singles/blurring/setEnergyOfReference 511. keV
+/gate/digitizer/Singles/insert thresholder
+/gate/digitizer/Singles/thresholder/setThreshold 430. keV
+/gate/digitizer/Singles/insert upholder
+/gate/digitizer/Singles/upholder/setUphold 650. keV
+# 141 ps per single -> 200 ps CTR = 30 mm (TOF_resolution_mm in the JSON)
+/gate/digitizer/Singles/insert timeResolution
+/gate/digitizer/Singles/timeResolution/setTimeResolution 0.141 ns
+
+/gate/digitizer/Coincidences/setWindow 4.3 ns
+/gate/digitizer/Coincidences/MultiplesPolicy takeWinnerOfGoods
+
+# ---------------------------------------------------------------- 4 back-to-back point sources (511 keV)
+# PTSRC positions of PETSIRDTestData (AcquisitionProtocols.md) with L = 256 mm and rho = 120 mm,
+# all in the same acquisition (sourceID 0..3 in the order below)
+
+/gate/source/addSource p1
+/gate/source/p1/setActivity 90000. becquerel
+/gate/source/p1/setType backtoback
+/gate/source/p1/gps/particle gamma
+/gate/source/p1/gps/ene/type Mono
+/gate/source/p1/gps/ene/mono 511. keV
+/gate/source/p1/gps/pos/type Point
+/gate/source/p1/gps/pos/centre 0 -10 115.2 mm
+/gate/source/p1/gps/ang/type iso
+
+/gate/source/addSource p2
+/gate/source/p2/setActivity 90000. becquerel
+/gate/source/p2/setType backtoback
+/gate/source/p2/gps/particle gamma
+/gate/source/p2/gps/ene/type Mono
+/gate/source/p2/gps/ene/mono 511. keV
+/gate/source/p2/gps/pos/type Point
+/gate/source/p2/gps/pos/centre 120 0 0 mm
+/gate/source/p2/gps/ang/type iso
+
+/gate/source/addSource p3
+/gate/source/p3/setActivity 90000. becquerel
+/gate/source/p3/setType backtoback
+/gate/source/p3/gps/particle gamma
+/gate/source/p3/gps/ene/type Mono
+/gate/source/p3/gps/ene/mono 511. keV
+/gate/source/p3/gps/pos/type Point
+/gate/source/p3/gps/pos/centre 10 0 0 mm
+/gate/source/p3/gps/ang/type iso
+
+/gate/source/addSource p4
+/gate/source/p4/setActivity 90000. becquerel
+/gate/source/p4/setType backtoback
+/gate/source/p4/gps/particle gamma
+/gate/source/p4/gps/ene/type Mono
+/gate/source/p4/gps/ene/mono 511. keV
+/gate/source/p4/gps/pos/type Point
+/gate/source/p4/gps/pos/centre 120 0 115.2 mm
+/gate/source/p4/gps/ang/type iso
+
+# ---------------------------------------------------------------- output
+/gate/output/root/enable
+/gate/output/root/setFileName output/ptsrc_1
+/gate/output/root/setRootHitFlag 0
+/gate/output/root/setRootSinglesFlag 0
+/gate/output/root/setRootCoincidencesFlag 1
+
+# ---------------------------------------------------------------- acquisition: 2 s
+/gate/random/setEngineName MersenneTwister
+/gate/random/setEngineSeed 20261116
+/gate/application/setTimeSlice 2. s
+/gate/application/setTimeStart 0. s
+/gate/application/setTimeStop 2. s
+/gate/application/startDAQ
