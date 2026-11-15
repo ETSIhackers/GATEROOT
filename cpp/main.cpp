@@ -222,7 +222,7 @@ ScannerGeometry ReadScannerGeometry(const std::string& filename)
   scanner_geometry.detector_x_dim = get_value(j, "detector_x_dim");
   scanner_geometry.detector_y_dim = get_value(j, "detector_y_dim");
   scanner_geometry.detector_z_dim = get_value(j, "detector_z_dim");
-  scanner_geometry.average_DOI = 0.7F; // TODO
+  scanner_geometry.average_DOI = 7.F; // TODO
   scanner_geometry.energy_LLD = get_value(j, "energy_LLD");
   scanner_geometry.energy_ULD = get_value(j, "energy_ULD");
   scanner_geometry.EnergyResolutionAt511 = get_value(j, "EnergyResolutionAt511");
@@ -946,7 +946,8 @@ int main(int argc, char** argv)
         // ensure correct order
         if (event.detection_bins[0] < event.detection_bins[1]) {
           swap(event.detection_bins[0], event.detection_bins[1]);
-          event.tof_idx *= -1;
+          const auto num_tof_bins = header.scanner.tof_bin_edges[type_of_module][type_of_module].NumberOfBins();
+          event.tof_idx = num_tof_bins - 1 - event.tof_idx;
         }
 
         if (verbose && i%100000 == 0) {
