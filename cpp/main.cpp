@@ -451,7 +451,8 @@ set_detection_efficiencies(petsird::ScannerInformation& scanner, const ScannerGe
 
   for (unsigned int mod1 = 0; mod1 < num_modules; ++mod1)
     {
-      for (unsigned int mod2 = 0; mod2 < num_modules; ++mod2)
+      // the LUT is lower-triangular: only [mod1][mod2] with mod2 <= mod1 exists
+      for (unsigned int mod2 = 0; mod2 <= mod1; ++mod2)
         {
           const auto z1 = mod1 % NZ;
           const auto a1 = mod1 / NZ;
@@ -571,13 +572,20 @@ SetEfficienciesFromFile(petsird::ScannerInformation& scanner, const ScannerGeome
       // int SGID = module_pair_SGID_LUT(mod1, mod2);
       // unsigned int mod_id1 = rsec_xy_id1 + scannerGeometry.n_rsec_xy * rsec_z_id1;
       // unsigned int mod_id2 = rsec_xy_id2 + scannerGeometry.n_rsec_xy * rsec_z_id2;
-      int SGID = module_pair_SGID_LUT[rsec_id1][rsec_id2];
       // printf("module_id1=%d, submodule_id1=%d, crystal_id1=%d, layer_id1=%d\n", module_id1, submodule_id1, crystal_id1, layer_id1);
       // printf("module_id2=%d, submodule_id2=%d, crystal_id2=%d, layer_id2=%d\n", module_id2, submodule_id2, crystal_id2, layer_id2);
       // printf("mod1=%d, mod2=%d\n", mod1, mod2);
-      //printf("SGID=%d, rsec_id1=%d, rsec_id2=%d\n", SGID, rsec_id1, rsec_id2);
       unsigned int element_id_in_module1 = calculate_element_index(mod_id1, smod_id1, cry_id1, layer_id1, scannerGeometry);
       unsigned int element_id_in_module2 = calculate_element_index(mod_id2, smod_id2, cry_id2, layer_id2, scannerGeometry);
+      // the LUT is lower-triangular: put the pair in the order [larger module][smaller module]
+      int SGID;
+      if (rsec_id1 < rsec_id2) {
+         SGID = module_pair_SGID_LUT[rsec_id2][rsec_id1];
+      }
+      else {
+        SGID = module_pair_SGID_LUT[rsec_id1][rsec_id2];
+       }
+      //printf("SGID=%d, rsec_id1=%d, rsec_id2=%d\n", SGID, rsec_id1, rsec_id2);
 
       if (SGID>=0) {
         sum_components(SGID, element_id_in_module1, element_id_in_module2) += value;
