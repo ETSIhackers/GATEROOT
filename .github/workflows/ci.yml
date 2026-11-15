@@ -23,31 +23,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
 
       - name: Configure environment
         uses: ./.github/actions/configure-environment
 
-      - name: Install yardl
-        run: |
-          YARDL_DIR=${{github.workspace}}/yardl
-          mkdir ${YARDL_DIR}
-          cd ${YARDL_DIR}
-          echo "${{github.workspace}}/yardl" >> $GITHUB_PATH
-          YARDL_VERSION=0.6.5
-          wget --quiet "https://github.com/microsoft/yardl/releases/download/v${YARDL_VERSION}/yardl_${YARDL_VERSION}_linux_x86_64.tar.gz"
-          tar -xzf "yardl_${YARDL_VERSION}_linux_x86_64.tar.gz"
-          rm "yardl_${YARDL_VERSION}_linux_x86_64.tar.gz"
-
-      - name: Build model
-        run: |
-          cd PETSIRD/model
-          yardl generate
-
       - name: Cpp
         run: |
           cd cpp && mkdir -p build && cd build
-          cmake -G Ninja -S .. -DHDF5_ROOT="$CONDA_PREFIX"
+          cmake -G Ninja -S .. -DCMAKE_PREFIX_PATH="$CONDA_PREFIX" -DCMAKE_INSTALL_PATH="$CONDA_PREFIX"
           ninja

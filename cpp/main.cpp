@@ -15,14 +15,14 @@
 //######################################################################################
 //# Authors: Nicolas A Karakatsanis, Kris Thielemans, Michael Hansen, Hideaki Tashima  #
 //#                                                                                    #
-//# Date  23-NOV-2023 - July 2025                                                      #
+//# Date  23-NOV-2023 - Nov 2026                                                #
 //#                                                                                    #
 //# Objective : To read the coincidences TTree from the .root file, and generate  the  #
 //#             corresponding PETSIRD file.                                            #
 //#                                                                                    #
 //# Input     : Monte Carlo data from GATE                                             #
 //#                                                                                    #
-//# Output    : PETSIRD file (tested with v0.7)                                        #
+//# Output    : PETSIRD file (tested with v0.13)                                        #
 //#                                                                                    #
 //######################################################################################
 //#                                                                                    #
@@ -92,6 +92,7 @@ struct ScannerGeometry
   int ax_phys_crystal_num;
   */
   float detector_x_dim, detector_y_dim, detector_z_dim; // in mm
+  float average_DOI; // in mm
   float energy_LLD, energy_ULD;
   float EnergyResolutionAt511;
   float TOF_resolution_mm;
@@ -221,6 +222,7 @@ ScannerGeometry ReadScannerGeometry(const std::string& filename)
   scanner_geometry.detector_x_dim = get_value(j, "detector_x_dim");
   scanner_geometry.detector_y_dim = get_value(j, "detector_y_dim");
   scanner_geometry.detector_z_dim = get_value(j, "detector_z_dim");
+  scanner_geometry.average_DOI = 7.F; // TODO
   scanner_geometry.energy_LLD = get_value(j, "energy_LLD");
   scanner_geometry.energy_ULD = get_value(j, "energy_ULD");
   scanner_geometry.EnergyResolutionAt511 = get_value(j, "EnergyResolutionAt511");
@@ -332,22 +334,14 @@ int calculate_module_index(unsigned int gantry_id, unsigned int rsector_id, cons
 petsird::BoxSolidVolume
 get_crystal(const ScannerGeometry& scannerGeometry)
 {
- //shift 0 in y and z
- using petsird::Coordinate;
-  petsird::BoxShape crystal_shape{ Coordinate{ { -scannerGeometry.detector_x_dim/2, -scannerGeometry.detector_y_dim/2, -scannerGeometry.detector_z_dim/2 } },
-                                   Coordinate{ { -scannerGeometry.detector_x_dim/2, -scannerGeometry.detector_y_dim/2, scannerGeometry.detector_z_dim/2 } },
-                                   Coordinate{ { -scannerGeometry.detector_x_dim/2, scannerGeometry.detector_y_dim/2, scannerGeometry.detector_z_dim/2 } },
-                                   Coordinate{ { -scannerGeometry.detector_x_dim/2, scannerGeometry.detector_y_dim/2, -scannerGeometry.detector_z_dim/2 } },
-                                   Coordinate{ { scannerGeometry.detector_x_dim/2, -scannerGeometry.detector_y_dim/2, -scannerGeometry.detector_z_dim/2 } },
-                                   Coordinate{ { scannerGeometry.detector_x_dim/2, -scannerGeometry.detector_y_dim/2, scannerGeometry.detector_z_dim/2 } },
-                                   Coordinate{ { scannerGeometry.detector_x_dim/2, scannerGeometry.detector_y_dim/2, scannerGeometry.detector_z_dim/2 } },
-                                   Coordinate{ { scannerGeometry.detector_x_dim/2, scannerGeometry.detector_y_dim/2, -scannerGeometry.detector_z_dim/2 } } };
-  petsird::BoxSolidVolume crystal{ crystal_shape, /* material_id */ 1 };
-  return crystal;
+  std::array<float, 3> sizes_in_mm{scannerGeometry.detector_x_dim, scannerGeometry.detector_y_dim, scannerGeometry.detector_x_dim};
+  return petsird_helpers::geometry::construct_cuboid_box(
+    sizes_in_mm,
+    { sizes_in_mm[0] / 2.F - scannerGeometry.average_DOI, 0.F, 0.F },
+    /* material_id */ 1);
 }
 
 
-//! return a module of NUM_CRYSTALS_PER_MODULE cuboids
 petsird::DetectorModule
 get_detector_module(const ScannerGeometry& scannerGeometry)
 {
@@ -362,7 +356,7 @@ get_detector_module(const ScannerGeometry& scannerGeometry)
               for (int rep_cry_xy = 0; rep_cry_xy < scannerGeometry.n_cry_xy; ++rep_cry_xy)
                   for (int rep_cry_layer = 0; rep_cry_layer < scannerGeometry.n_cry_layers; ++rep_cry_layer)
                     {
-                      petsird::RigidTransformation transform{ { { 1.F, 0.F, 0.F, scannerGeometry.radius + rep_cry_layer * scannerGeometry.detector_x_dim + scannerGeometry.detector_x_dim/2 },
+                      petsird::RigidTransformation transform { { { 1.F, 0.F, 0.F, rep_cry_layer * scannerGeometry.detector_x_dim + scannerGeometry.detector_x_dim/2 },
                                                                 { 0.F, 1.F, 0.F, (rep_mod_xy - scannerGeometry.n_mod_xy / 2 + ((scannerGeometry.n_mod_xy - 1) % 2 ) * 0.5F) * scannerGeometry.n_smod_xy * scannerGeometry.n_cry_xy * scannerGeometry.detector_y_dim
                                                                                + (rep_smod_xy - scannerGeometry.n_smod_xy / 2 + ((scannerGeometry.n_smod_xy - 1) % 2 ) * 0.5F) * scannerGeometry.n_cry_xy * scannerGeometry.detector_y_dim
                                                                                + (rep_cry_xy - scannerGeometry.n_cry_xy / 2 + ((scannerGeometry.n_cry_xy - 1) % 2 ) * 0.5F) * scannerGeometry.detector_y_dim },
@@ -396,11 +390,16 @@ get_scanner_geometry(const ScannerGeometry& scannerGeometry)
     for (auto angle : angles)
       for (int rep_rsec_z = 0; rep_rsec_z < scannerGeometry.n_rsec_z; ++rep_rsec_z)
         {
-          petsird::RigidTransformation transform{ { { std::cos(angle), -std::sin(angle), 0.F, 0.F },
+          petsird::RigidTransformation rotation{ {  { std::cos(angle), -std::sin(angle), 0.F, 0.F },
                                                     { std::sin(angle), std::cos(angle), 0.F, 0.F},
-                                                    { 0.F, 0.F, 1.F, (rep_rsec_z - scannerGeometry.n_rsec_z / 2 + ((scannerGeometry.n_rsec_z - 1) % 2 ) * 0.5F) * scannerGeometry.n_mod_z * scannerGeometry.n_smod_z * scannerGeometry.n_cry_z * scannerGeometry.detector_z_dim} } };
-
-          rep_module.transforms.push_back(transform);
+                                                    { 0.F, 0.F, 1.F, 0.F } } };
+          petsird::RigidTransformation translation{
+            { { 1.F, 0.F, 0.F, scannerGeometry.radius + scannerGeometry.average_DOI },
+              { 0.F, 1.F, 0.F, 0.F },
+              { 0.F, 0.F, 1.F, (rep_rsec_z - scannerGeometry.n_rsec_z / 2 + ((scannerGeometry.n_rsec_z - 1) % 2 ) * 0.5F) * scannerGeometry.n_mod_z * scannerGeometry.n_smod_z * scannerGeometry.n_cry_z * scannerGeometry.detector_z_dim } }
+          };
+          std::vector<petsird::RigidTransformation> translate_then_rotate{ rotation, translation };
+          rep_module.transforms.push_back(petsird_helpers::geometry::mult_transforms(translate_then_rotate));
         }
   }
   petsird::ScannerGeometry scanner_geometry;
@@ -422,15 +421,15 @@ set_detection_efficiencies(petsird::ScannerInformation& scanner, const ScannerGe
   const auto num_event_energy_bins = event_energy_bin_edges.NumberOfBins();
 
   // set all detection_bin_efficiencies to 1 in this example
-  if (scanner.detection_efficiencies.detection_bin_efficiencies)
+  if (!scanner.detection_efficiencies.detection_bin_efficiencies.empty())
     {
-      auto& bin_effs = (*scanner.detection_efficiencies.detection_bin_efficiencies)[type_of_module];
-      yardl::resize(bin_effs, { num_detection_bins });
+      auto& bin_effs = scanner.detection_efficiencies.detection_bin_efficiencies[type_of_module];
+      bin_effs.resize(num_detection_bins);
       std::fill(begin(bin_effs), end(bin_effs), 1.F);
     }
 
   // check if the caller wants to have module-pair stuff. If not, return.
-  if (!scanner.detection_efficiencies.module_pair_efficiencies_vectors)
+  if (scanner.detection_efficiencies.module_pair_efficiencies_vectors.empty())
     return;
 
   const auto& rep_module = scanner.scanner_geometry.replicated_modules[type_of_module];
@@ -447,8 +446,9 @@ set_detection_efficiencies(petsird::ScannerInformation& scanner, const ScannerGe
   // SGID = z1 + NZ * (z2 + NZ * abs(a2 - a1) - 1)
   const auto NZ = scannerGeometry.n_rsec_z;
 
-  auto& module_pair_SGID_LUT = (*scanner.detection_efficiencies.module_pair_sgidlut)[type_of_module][type_of_module];
-  module_pair_SGID_LUT = yardl::NDArray<int, 2>({ num_modules, num_modules });
+  auto& module_pair_SGID_LUT = scanner.detection_efficiencies.module_pair_sgidlut[type_of_module][type_of_module];
+  module_pair_SGID_LUT = petsird_helpers::create::construct_lower_triangular_or_rectangular_matrix<petsird::SGID>(num_modules, num_modules, true);
+
   for (unsigned int mod1 = 0; mod1 < num_modules; ++mod1)
     {
       for (unsigned int mod2 = 0; mod2 < num_modules; ++mod2)
@@ -459,18 +459,18 @@ set_detection_efficiencies(petsird::ScannerInformation& scanner, const ScannerGe
           const auto a2 = mod2 / NZ;
           if (a1 == a2)
             {
-              module_pair_SGID_LUT(mod1, mod2) = -1;
+              module_pair_SGID_LUT[mod1][mod2] = -1;
             }
           else
             {
-              module_pair_SGID_LUT(mod1, mod2) = z1 + NZ * (z2 + NZ * (std::abs(int(a2) - int(a1)) - 1));
+              module_pair_SGID_LUT[mod1][mod2] = z1 + NZ * (z2 + NZ * (std::abs(int(a2) - int(a1)) - 1));
             }
         }
     }
   // assert(module_pair_SGID_LUT).max() == num_SGIDs - 1);
   // initialise module_pair_efficiencies
   auto& module_pair_efficiencies_vector
-      = (*scanner.detection_efficiencies.module_pair_efficiencies_vectors)[type_of_module][type_of_module];
+      = scanner.detection_efficiencies.module_pair_efficiencies_vectors[type_of_module][type_of_module];
   // assign an empty vector first, and reserve correct size
   module_pair_efficiencies_vector = petsird::ModulePairEfficienciesVector();
   module_pair_efficiencies_vector.reserve(num_SGIDs);
@@ -483,9 +483,7 @@ set_detection_efficiencies(petsird::ScannerInformation& scanner, const ScannerGe
       // extract first module_pair for this SGID. However, as this currently unused, it is commented out
       // const auto& module_pair = *std::find(module_pair_SGID_LUT.begin(), module_pair_SGID_LUT.end(), SGID);
       petsird::ModulePairEfficiencies module_pair_efficiencies;
-      module_pair_efficiencies.values = yardl::NDArray<float, 2>({ num_detection_bins_in_module, num_detection_bins_in_module });
-      // give some (non-physical) value
-      module_pair_efficiencies.values.fill(1.F);
+      module_pair_efficiencies.values =  petsird_helpers::create::construct_rectangular_matrix<float>(num_detection_bins_in_module, num_detection_bins_in_module );
       module_pair_efficiencies.sgid = SGID;
       module_pair_efficiencies_vector.emplace_back(module_pair_efficiencies);
       assert(module_pair_efficiencies_vector.size() == unsigned(SGID + 1));
@@ -502,7 +500,7 @@ SetEfficienciesFromFile(petsird::ScannerInformation& scanner, const ScannerGeome
   //printf("num_modules=%ld\n", num_modules);
   //printf("scannerGeometry.n_rsec_z=%d\n", scannerGeometry.n_rsec_z);
 
-  auto& module_pair_SGID_LUT = (*scanner.detection_efficiencies.module_pair_sgidlut)[type_of_module][type_of_module];
+  auto& module_pair_SGID_LUT = scanner.detection_efficiencies.module_pair_sgidlut[type_of_module][type_of_module];
 
   const auto& detecting_elements = rep_module.object.detecting_elements;
   const auto num_det_els_in_module = detecting_elements.transforms.size();
@@ -573,7 +571,7 @@ SetEfficienciesFromFile(petsird::ScannerInformation& scanner, const ScannerGeome
       // int SGID = module_pair_SGID_LUT(mod1, mod2);
       // unsigned int mod_id1 = rsec_xy_id1 + scannerGeometry.n_rsec_xy * rsec_z_id1;
       // unsigned int mod_id2 = rsec_xy_id2 + scannerGeometry.n_rsec_xy * rsec_z_id2;
-      int SGID = module_pair_SGID_LUT(rsec_id1, rsec_id2);
+      int SGID = module_pair_SGID_LUT[rsec_id1][rsec_id2];
       // printf("module_id1=%d, submodule_id1=%d, crystal_id1=%d, layer_id1=%d\n", module_id1, submodule_id1, crystal_id1, layer_id1);
       // printf("module_id2=%d, submodule_id2=%d, crystal_id2=%d, layer_id2=%d\n", module_id2, submodule_id2, crystal_id2, layer_id2);
       // printf("mod1=%d, mod2=%d\n", mod1, mod2);
@@ -590,15 +588,15 @@ SetEfficienciesFromFile(petsird::ScannerInformation& scanner, const ScannerGeome
   std::cout << "completed." << std::endl;
   
   auto& module_pair_efficiencies_vector
-      = (*scanner.detection_efficiencies.module_pair_efficiencies_vectors)[type_of_module][type_of_module];
+      = scanner.detection_efficiencies.module_pair_efficiencies_vectors[type_of_module][type_of_module];
   for (unsigned int SGID=0; SGID < num_SGIDs; ++SGID) {
     for (unsigned int detection_bin1=0; detection_bin1<num_detection_bins_in_module; ++detection_bin1) {
       for (unsigned int detection_bin2=0; detection_bin2<num_detection_bins_in_module; ++detection_bin2) {
         if (count_components(SGID, detection_bin1, detection_bin2)>0) {
-          module_pair_efficiencies_vector[SGID].values(detection_bin1, detection_bin2) 
+          module_pair_efficiencies_vector[SGID].values[detection_bin1][detection_bin2]
             = sum_components(SGID, detection_bin1, detection_bin2) / count_components(SGID, detection_bin1, detection_bin2);
         } else {
-          module_pair_efficiencies_vector[SGID].values(detection_bin1, detection_bin2) = 0;
+          module_pair_efficiencies_vector[SGID].values[detection_bin1][detection_bin2] = 0;
         }
       }
     }
@@ -606,15 +604,15 @@ SetEfficienciesFromFile(petsird::ScannerInformation& scanner, const ScannerGeome
 
 }
 
-petsird::ScannerInformation
-get_scanner_info(const ScannerGeometry& scannerGeometry, bool store_det_efficiencies)
+void
+set_scanner_info(petsird::Header& header, const ScannerGeometry& scannerGeometry, bool store_det_efficiencies)
 {
   const unsigned long NUMBER_OF_TOF_BINS = static_cast<unsigned long>(scannerGeometry.number_of_TOF_bins);
   const unsigned long NUMBER_OF_EVENT_ENERGY_BINS = static_cast<unsigned long>(scannerGeometry.number_of_energy_bins);
   const float energy_LLD = scannerGeometry.energy_LLD;
   const float energy_ULD =scannerGeometry.energy_ULD;
 
-  petsird::ScannerInformation scanner_info;
+  auto& scanner_info = header.scanner;
   scanner_info.model_name = scannerGeometry.model_name; // "PETSIRD_GATEROOT"
 
   const auto num_types_of_modules = 1;
@@ -663,10 +661,13 @@ get_scanner_info(const ScannerGeometry& scannerGeometry, bool store_det_efficien
   if (store_det_efficiencies)
     set_detection_efficiencies(scanner_info, scannerGeometry); // initialize all valid efficiencies with the value of 1
 
-  // TODO scanner_info.coincidence_policy = petsird::CoincidencePolicy::kRejectMultiples;
-  scanner_info.delayed_events_are_stored = false;
-  scanner_info.triple_events_are_stored = false;
-  return scanner_info;
+  // TODO depends on GATE config of course
+  scanner_info.prompt_event_policy = petsird::CoincidencePolicy::kMultiplesAsSequentialCoincidences;
+  scanner_info.delayed_event_policy = petsird::CoincidencePolicy::kNone;
+  scanner_info.single_event_policy = petsird::SingleEventPolicy::kNone;
+  scanner_info.triple_event_policy = petsird::TripleEventPolicy::kNone;
+  scanner_info.quadruple_event_policy = petsird::QuadrupleEventPolicy::kNone;
+  header.contains_weighted_event_time_blocks = false;
 }
 
 
@@ -723,7 +724,7 @@ auto create_new_time_block(const petsird::ScannerInformation& scanner)
   petsird::EventTimeBlock time_block;
   // allocate lists for prompt_events
   // warning: would have to do the same for delayeds once we store them
-  time_block.prompt_events = petsird_helpers::create::construct_2D_nested_vector<petsird::ListOfCoincidenceEvents>(num_module_types, num_module_types);
+  time_block.prompt_events = petsird_helpers::create::construct_lower_triangular_matrix<petsird::ListOfCoincidenceEvents>(num_module_types);
   return time_block;
 }
 
@@ -885,7 +886,7 @@ int main(int argc, char** argv)
 
   // Output PETSIRD
   petsird::Header header;
-  header.scanner = get_scanner_info(scannerGeometry, store_det_efficiencies);
+  set_scanner_info(header, scannerGeometry, store_det_efficiencies);
 
   if (store_det_efficiencies) {
     SetEfficienciesFromFile(header.scanner, scannerGeometry, normalization_file);
@@ -941,6 +942,13 @@ int main(int argc, char** argv)
         event.detection_bins[1] = petsird_helpers::make_detection_bin(header.scanner, type_of_module, expanded_detection_bin);
         const double tofPos_mm = 1.0e12 * (time1 - time2) * speed_of_light_mm_per_ps / 2; //in mm
         event.tof_idx = tofToIdx(tofPos_mm, scanner);
+
+        // ensure correct order
+        if (event.detection_bins[0] < event.detection_bins[1]) {
+          swap(event.detection_bins[0], event.detection_bins[1]);
+          const auto num_tof_bins = header.scanner.tof_bin_edges[type_of_module][type_of_module].NumberOfBins();
+          event.tof_idx = num_tof_bins - 1 - event.tof_idx;
+        }
 
         if (verbose && i%100000 == 0) {
           std::cout << "Event " << i << std::endl;

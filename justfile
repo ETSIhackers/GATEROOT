@@ -1,20 +1,16 @@
 set shell := ['bash', '-ceuo', 'pipefail']
-version := "0.8.0"
+version := "0.13.1"
 
 default: run
 
 @ensure-build-dir:
     mkdir -p cpp/build
 
-@generate:
-    cd PETSIRD/model; \
-    yardl generate
-
-@configure: generate ensure-build-dir
+@configure: ensure-build-dir
     cd cpp/build; \
     cmake -GNinja ..
 
-@build: generate configure
+@build: configure
     cd cpp/build; \
     ninja
 
