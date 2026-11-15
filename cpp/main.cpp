@@ -356,7 +356,7 @@ get_detector_module(const ScannerGeometry& scannerGeometry)
               for (int rep_cry_xy = 0; rep_cry_xy < scannerGeometry.n_cry_xy; ++rep_cry_xy)
                   for (int rep_cry_layer = 0; rep_cry_layer < scannerGeometry.n_cry_layers; ++rep_cry_layer)
                     {
-                      petsird::RigidTransformation transform { { { 1.F, 0.F, 0.F, rep_cry_layer * scannerGeometry.detector_x_dim + scannerGeometry.detector_x_dim/2 },
+                      petsird::RigidTransformation transform { { { 1.F, 0.F, 0.F, rep_cry_layer * scannerGeometry.detector_x_dim },
                                                                 { 0.F, 1.F, 0.F, (rep_mod_xy - scannerGeometry.n_mod_xy / 2 + ((scannerGeometry.n_mod_xy - 1) % 2 ) * 0.5F) * scannerGeometry.n_smod_xy * scannerGeometry.n_cry_xy * scannerGeometry.detector_y_dim
                                                                                + (rep_smod_xy - scannerGeometry.n_smod_xy / 2 + ((scannerGeometry.n_smod_xy - 1) % 2 ) * 0.5F) * scannerGeometry.n_cry_xy * scannerGeometry.detector_y_dim
                                                                                + (rep_cry_xy - scannerGeometry.n_cry_xy / 2 + ((scannerGeometry.n_cry_xy - 1) % 2 ) * 0.5F) * scannerGeometry.detector_y_dim },
