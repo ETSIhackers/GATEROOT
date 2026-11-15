@@ -577,19 +577,17 @@ SetEfficienciesFromFile(petsird::ScannerInformation& scanner, const ScannerGeome
       // printf("mod1=%d, mod2=%d\n", mod1, mod2);
       unsigned int element_id_in_module1 = calculate_element_index(mod_id1, smod_id1, cry_id1, layer_id1, scannerGeometry);
       unsigned int element_id_in_module2 = calculate_element_index(mod_id2, smod_id2, cry_id2, layer_id2, scannerGeometry);
-      // the LUT is lower-triangular: put the pair in the order [larger module][smaller module]
-      int SGID;
-      if (rsec_id1 < rsec_id2) {
-         SGID = module_pair_SGID_LUT[rsec_id2][rsec_id1];
-      }
-      else {
-        SGID = module_pair_SGID_LUT[rsec_id1][rsec_id2];
-       }
+      // the LUT is lower-triangular: use the order [larger module][smaller module],
+      // for the SGID and for the elements in the module-pair efficiencies
+      const bool swapped = rsec_id1 < rsec_id2;
+      const int SGID = swapped ? module_pair_SGID_LUT[rsec_id2][rsec_id1] : module_pair_SGID_LUT[rsec_id1][rsec_id2];
+      const auto el1 = swapped ? element_id_in_module2 : element_id_in_module1;
+      const auto el2 = swapped ? element_id_in_module1 : element_id_in_module2;
       //printf("SGID=%d, rsec_id1=%d, rsec_id2=%d\n", SGID, rsec_id1, rsec_id2);
 
       if (SGID>=0) {
-        sum_components(SGID, element_id_in_module1, element_id_in_module2) += value;
-        count_components(SGID, element_id_in_module1, element_id_in_module2) ++;
+        sum_components(SGID, el1, el2) += value;
+        count_components(SGID, el1, el2) ++;
       }
     }
   }
