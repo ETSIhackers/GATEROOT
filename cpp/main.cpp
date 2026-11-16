@@ -330,10 +330,12 @@ int calculate_module_index(unsigned int gantry_id, unsigned int rsector_id, cons
   const int N_RSEC_xy = scannerGeometry.n_rsec_xy;
   const int N_RSEC_z = scannerGeometry.n_rsec_z;
 
-  // NK code
-  // return (Int_t)(rsector_id/N_RSEC_xy + (rsector_id%N_RSEC_xy)*N_RSEC_z)
-  //           + (Int_t)(gantry_id)*N_RSEC_xy*N_RSEC_z;
-  return (Int_t)(gantry_id)*N_RSEC_z*N_RSEC_xy + (Int_t)rsector_id;
+  // GATE writes rsectorID = axial * N_RSEC_xy + angular (GateVSystem::ComputeMainComponentID,
+  // linear axial repeater), but get_scanner_geometry() orders the modules as
+  // angular * N_RSEC_z + axial, so convert. With N_RSEC_z == 1 both orders are the same (#42).
+  const int angular = rsector_id % N_RSEC_xy;
+  const int axial   = rsector_id / N_RSEC_xy;
+  return (Int_t)(gantry_id)*N_RSEC_z*N_RSEC_xy + angular*N_RSEC_z + axial;
 }
 
 //! return a cuboid volume
