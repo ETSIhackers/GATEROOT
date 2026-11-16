@@ -5,11 +5,19 @@ PTSRC protocol in [PETSIRDTestData](https://github.com/ETSInitiative/PETSIRDTest
 (L = 256 mm, rho = 120 mm). Every coincidence contains the true emission position (`sourcePosX/Y/Z`) and
 the source number (`sourceID`), so the converted PETSIRD file can be checked against them.
 
-Unlike the protocol, the 4 sources are in the same acquisition; they can be separated with `sourceID`.
+The protocol asks for 1 source per acquisition, so there is one ROOT file per source (`Coincidences` tree only).
+They come from one simulation of the 4 sources, split by `sourceID` (see below); the 53 coincidences between
+two different sources (randoms) are not in any of them.
 
-- `ptsrc_1.root`: GATE output (`Coincidences` tree only), 23,533 coincidences of which 23,461 trues
-- `main.mac`: GATE macro used to generate it
-- `points.txt`: true positions of the 4 point sources (mm, GATE world coordinates), in `sourceID` order
+| file | source | position (mm) | coincidences | trues |
+|---|---|---|---|---|
+| `ptsrc_P1_1.root` | P1 | (0, -10, 115.2) | 1,211 | 1,208 |
+| `ptsrc_P2_1.root` | P2 | (120, 0, 0) | 10,082 | 10,078 |
+| `ptsrc_P3_1.root` | P3 | (10, 0, 0) | 10,777 | 10,773 |
+| `ptsrc_P4_1.root` | P4 | (120, 0, 115.2) | 1,410 | 1,402 |
+
+- `main.mac`: GATE macro used for the simulation
+- `points.txt`: true positions of the 4 point sources (mm, GATE world coordinates), in `sourceID` order (P1 to P4)
 - `geometry.json`: scanner description for `root_to_petsird`
 
 ## Simulation
@@ -28,4 +36,16 @@ https://raw.githubusercontent.com/OpenGATE/Gate/v9.2/GateMaterials.db and run
 
 ```sh
 docker run --rm -v "$PWD":/APP opengatecollaboration/gate:9.2-docker mac/main.mac
+```
+
+and split `output/ptsrc_1.root` by source with ROOT:
+
+```python
+import ROOT
+simulation = ROOT.TFile.Open("output/ptsrc_1.root")
+tree = simulation.Get("Coincidences")
+for k, name in enumerate(["P1", "P2", "P3", "P4"]):
+    out = ROOT.TFile(f"ptsrc_{name}_1.root", "RECREATE")
+    tree.CopyTree(f"sourceID1 == {k} && sourceID2 == {k}").Write("", ROOT.TObject.kOverwrite)
+    out.Close()
 ```

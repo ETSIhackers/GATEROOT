@@ -11,8 +11,10 @@ dependencies:
   - just=1.36.0
   - ninja>=1.11.0
   - root_base>=6.28
-  - libpetsird=0.13.1
+  - libpetsird=0.13.3
   - numpy
-  - petsird=0.13.1
+  - parallelproj>=2.0
+  - petsird=0.13.3
   - pytest
   - shellcheck>=0.8.0
+  - uproot>=5.7
