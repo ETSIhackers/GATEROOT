@@ -1,6 +1,8 @@
 # Light simulation to test GATEROOT: ETSI PET scanner with 256 mm AFOV + 4 back-to-back point sources (PTSRC protocol).
 # Geometry = geometry.json (ETSIPETscanner256mmAFOV, same as Zenodo record 15930738 plus model_name)
-#   60 rsectors, modules 1x2x16, 1 submodule, crystals 1x5x5 of 20 x 3.2 x 3.2 mm, inner radius 308 mm
+#   2 rings of 60 rsectors along z (n_rsec_z = 2, to test the rsectorID order of GATE),
+#   modules 1x2x8, 1 submodule, crystals 1x5x5 of 20 x 3.2 x 3.2 mm, inner radius 308 mm
+#   (same crystals as 1 ring of rsectors with modules 1x2x16)
 # GATE 9.2 (classic digitizer syntax).
 
 /vis/disable
@@ -31,7 +33,7 @@
 /gate/rsector/placement/setTranslation 318. 0. 0. mm
 /gate/rsector/geometry/setXLength 20. mm
 /gate/rsector/geometry/setYLength 32. mm
-/gate/rsector/geometry/setZLength 256. mm
+/gate/rsector/geometry/setZLength 128. mm
 /gate/rsector/setMaterial G4_AIR
 
 /gate/rsector/daughters/name module
@@ -72,11 +74,15 @@
 /gate/module/repeaters/insert cubicArray
 /gate/module/cubicArray/setRepeatNumberX 1
 /gate/module/cubicArray/setRepeatNumberY 2
-/gate/module/cubicArray/setRepeatNumberZ 16
+/gate/module/cubicArray/setRepeatNumberZ 8
 /gate/module/cubicArray/setRepeatVector 0. 16. 16. mm
 
 /gate/rsector/repeaters/insert ring
 /gate/rsector/ring/setRepeatNumber 60
+# the axial copies must use a linear repeater (see the README)
+/gate/rsector/repeaters/insert linear
+/gate/rsector/linear/setRepeatNumber 2
+/gate/rsector/linear/setRepeatVector 0. 0. 128. mm
 
 /gate/systems/cylindricalPET/rsector/attach rsector
 /gate/systems/cylindricalPET/module/attach module
