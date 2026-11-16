@@ -31,10 +31,10 @@ default: run
     cpp/build/root_to_petsird --root-prefix ../ROOT_files/IEC/ETSIPETscanner_mIEC_ --number-of-root-files 0 --petsird-file petsird_ETSIPETscanner_mIEC_0min_v{{version}}.petsird -s data/root/ETSIPETscanner_geometry.json
 
 @run_10sec_mIEC: build
-    cpp/build/root_to_petsird --root-prefix ../ROOT_files/IEC/ETSIPETscanner_mIEC_ --number-of-root-files 1 --petsird-file petsird_ETSIPETscanner_mIEC_10sec_v{{version}}.petsird -s data/root/ETSIPETscanner_geometry.json
+    cpp/build/root_to_petsird --root-prefix ../ROOT_files/IEC/ETSIPETscanner_mIEC_ --number-of-root-files 1 --time-mode per-file --file-duration-ms 10000 --petsird-file petsird_ETSIPETscanner_mIEC_10sec_v{{version}}.petsird -s data/root/ETSIPETscanner_geometry.json
 
 @run_6min_mIEC: build
-    cpp/build/root_to_petsird --root-prefix ../ROOT_files/IEC/ETSIPETscanner_mIEC_ --number-of-root-files 36 --petsird-file petsird_ETSIPETscanner_mIEC_6min_v{{version}}.petsird -s data/root/ETSIPETscanner_geometry.json
+    cpp/build/root_to_petsird --root-prefix ../ROOT_files/IEC/ETSIPETscanner_mIEC_ --number-of-root-files 36 --time-mode per-file --file-duration-ms 10000 --petsird-file petsird_ETSIPETscanner_mIEC_6min_v{{version}}.petsird -s data/root/ETSIPETscanner_geometry.json
 
 
 @run_0min_voxBrain: build
