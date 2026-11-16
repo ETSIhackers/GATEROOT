@@ -247,6 +247,9 @@ void usage()
   std::cout << "  -c, --normalization-file <filename>         Normalization file" << std::endl;
   std::cout << "  -p, --petsird-file <filename>               PETSiRD file" << std::endl;
   std::cout << "  -n, --number-of-root-files <number>         Number of root files" << std::endl;
+  std::cout << "      --time-mode <absolute|per-file>         absolute (default): the ROOT files share one clock" << std::endl;
+  std::cout << "                                              per-file: each ROOT file restarts its clock at 0" << std::endl;
+  std::cout << "      --file-duration-ms <ms>                 Duration of each ROOT file with per-file (default 10000)" << std::endl;
   std::cout << "  -v, --verbose                               Verbose output" << std::endl;
   std::cout << "  -h, --help                                  Print this help message" << std::endl;
 }
@@ -749,6 +752,8 @@ int main(int argc, char** argv)
   std::string normalization_file;
   std::string petsird_file;
   int number_of_root_files = 2;
+  std::string time_mode = "absolute";
+  double file_duration_ms = 10000;
   bool verbose = false;
   bool store_det_efficiencies = true;
 
@@ -765,6 +770,10 @@ int main(int argc, char** argv)
       petsird_file = argv[++i];
     } else if (arg == "-n" || arg == "--number-of-root-files") {
       number_of_root_files = atoi(argv[++i]);
+    } else if (arg == "--time-mode") {
+      time_mode = argv[++i];
+    } else if (arg == "--file-duration-ms") {
+      file_duration_ms = atof(argv[++i]);
     } else if (arg == "-v" || arg == "--verbose") {
       verbose = true;
     } else if (arg == "-h" || arg == "--help") {
@@ -788,6 +797,13 @@ int main(int argc, char** argv)
     return 1;
   }
 
+  if (time_mode != "absolute" && time_mode != "per-file") {
+    std::cerr << "Unknown time mode: " << time_mode << std::endl;
+    usage();
+    return 1;
+  }
+  const bool per_file_time = time_mode == "per-file";
+
   if (normalization_file.empty()) {
     store_det_efficiencies=false;
   }
@@ -796,6 +812,7 @@ int main(int argc, char** argv)
   std::cout << "scanner_geometry_file: " << scanner_geometry_file << std::endl;
   std::cout << "normalization file: " << normalization_file << std::endl;
   std::cout << "petsird_file: " << petsird_file << std::endl;
+  std::cout << "time mode: " << time_mode << std::endl;
 
   // Read scanner geometry
   ScannerGeometry scannerGeometry;
@@ -812,6 +829,13 @@ int main(int argc, char** argv)
         std::cerr << e.what() << std::endl;
         return 1;
       }
+  }
+
+  if (per_file_time
+      && (file_duration_ms <= 0 || std::fmod(file_duration_ms, scannerGeometry.LM_time_block_duration_ms) != 0)) {
+    std::cerr << "--file-duration-ms must be a positive multiple of the time block duration ("
+              << scannerGeometry.LM_time_block_duration_ms << " ms)" << std::endl;
+    return 1;
   }
 
   string filedir, inputfilename;
@@ -935,6 +959,7 @@ int main(int argc, char** argv)
   writer.WriteHeader(header);
 
   long current_time_block = -1;
+  long last_time_block = -1;
   auto time_block = create_new_time_block(header.scanner);
 
   const auto event_time_block_duration = scannerGeometry.LM_time_block_duration_ms; // ms
@@ -947,6 +972,25 @@ int main(int argc, char** argv)
     }
 
     Coincidences->GetEntry(i);
+
+    // time in ms since the start of the acquisition
+    double time_ms = time1*1.0e3;
+    if (per_file_time) {
+      if (time_ms < 0 || time_ms >= file_duration_ms) {
+        std::cerr << "Error: event at " << time_ms << " ms in ROOT file " << Coincidences->GetTreeNumber() + 1
+                  << " is outside 0-" << file_duration_ms << " ms. Check --file-duration-ms." << std::endl;
+        return 1;
+      }
+      time_ms += Coincidences->GetTreeNumber() * file_duration_ms;
+    }
+    const long this_time_block = static_cast<long>(time_ms / event_time_block_duration);
+    if (this_time_block < last_time_block) {
+      std::cerr << "Error: time goes back in ROOT file " << Coincidences->GetTreeNumber() + 1
+                << ". If each ROOT file restarts its clock, use --time-mode per-file." << std::endl;
+      return 1;
+    }
+    last_time_block = this_time_block;
+
     if (eventID1 == eventID2)
     {
 	    if (comptonPhantom1 == 0 && comptonPhantom2 == 0) {
@@ -1002,15 +1046,14 @@ int main(int argc, char** argv)
           float distance_2 = std::sqrt(std::pow(mean_pos1.c[0]-globalPosX2, 2) + std::pow(mean_pos1.c[1]-globalPosY2, 2) + std::pow(mean_pos1.c[2]-globalPosZ2, 2));
           std::cout << "  Distance 2: " << distance_2 << std::endl;
         }
-        long this_time_block = static_cast<long>(time1*1.0e3 / event_time_block_duration);
         if (this_time_block != current_time_block) {
           if (current_time_block != -1) {
             writer.WriteTimeBlocks(time_block);
           }
           current_time_block = this_time_block;
           time_block = create_new_time_block(header.scanner);
-          time_block.time_interval.start = time1*1.0e3;
-          time_block.time_interval.stop = time1*1.0e3 + event_time_block_duration;
+          time_block.time_interval.start = time_ms;
+          time_block.time_interval.stop = time_ms + event_time_block_duration;
         }
         time_block.prompt_events[type_of_module][type_of_module].push_back(event);
         Counts_binned++;
