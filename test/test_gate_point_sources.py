@@ -5,7 +5,8 @@ The backprojection test runs on each of them. The other tests do not depend on t
 and only use P4, which is away from the centre in x and in z (the TOF check needs a source away from the centre).
 
 1. The C++ converter (cpp/build/root_to_petsird) and the Python converter (python/root_to_petsird.py)
-   must write the same PETSIRD content: same events, time blocks and header (geometry within 1e-3 mm).
+   must write the same PETSIRD content: same events, time blocks and header (geometry within 1e-3 mm),
+   with the true coincidences only (--selection true), all the prompts (--selection all) and only the randoms.
 2. PTSRC test of the acquisition protocols in PETSIRDTestData (doc/AcquisitionProtocols.md):
    geometric backprojection of the whole file (all efficiencies 1), without and with TOF, compared with
    the true position of the source. The protocol asks for the centre of mass of the backprojection, but
@@ -79,22 +80,30 @@ def source(request):
     return getattr(request, "param", SOURCES.index("P4"))
 
 
+def convert_cpp(source, out, selection):
+    subprocess.run([str(CONVERTER), "-r", str(root_prefix(source)), "-n", "1", "-s", str(DATA / "geometry.json"),
+                    "--selection", selection, "-p", str(out)], check=True, capture_output=True)
+
+
+def convert_python(source, out, selection):
+    subprocess.run([sys.executable, str(PYTHON_CONVERTER), "--root-prefix", str(root_prefix(source)),
+                    "--number-of-root-files", "1", "-s", str(DATA / "geometry.json"),
+                    "--time-mode", "absolute", "--selection", selection, "--petsird-file", str(out)],
+                   check=True, capture_output=True)
+
+
 @pytest.fixture(scope="module")
 def cpp_file(source, tmp_path_factory):
+    """true coincidences only, so that the k-th event is the k-th true coincidence of the ROOT file"""
     out = tmp_path_factory.mktemp(f"cpp_{SOURCES[source]}") / "ptsrc.petsird"
-    subprocess.run([str(CONVERTER), "-r", str(root_prefix(source)), "-n", "1",
-                    "-s", str(DATA / "geometry.json"), "-p", str(out)], check=True, capture_output=True)
+    convert_cpp(source, out, "true")
     return out
 
 
 @pytest.fixture(scope="module")
 def python_file(source, tmp_path_factory):
     out = tmp_path_factory.mktemp(f"python_{SOURCES[source]}") / "ptsrc.petsird"
-    # same selection as the C++ converter: true coincidences only
-    subprocess.run([sys.executable, str(PYTHON_CONVERTER), "--root-prefix", str(root_prefix(source)),
-                    "--number-of-root-files", "1", "-s", str(DATA / "geometry.json"),
-                    "--time-mode", "absolute", "--selection", "true", "--petsird-file", str(out)],
-                   check=True, capture_output=True)
+    convert_python(source, out, "true")
     return out
 
 
@@ -161,6 +170,21 @@ def test_python_converter_gives_the_same_output(converted, python_file):
     assert scanner_py.prompt_event_policy == scanner_cpp.prompt_event_policy
     assert scanner_py.delayed_event_policy == scanner_cpp.delayed_event_policy
     assert [(m.id, m.name) for m in scanner_py.bulk_materials] == [(m.id, m.name) for m in scanner_cpp.bulk_materials]
+
+
+@pytest.mark.parametrize("selection", ["all", "random"])
+def test_python_converter_gives_the_same_output_with_other_selections(source, converted, selection, tmp_path):
+    """other selections of prompt coincidences (the test data have no scatter: the sources are in air);
+    both converters drop the coincidences outside the energy window or the TOF bins"""
+    convert_cpp(source, tmp_path / "cpp.petsird", selection)
+    convert_python(source, tmp_path / "python.petsird", selection)
+    _, bins_cpp, tof_cpp, blocks_cpp = read_petsird(tmp_path / "cpp.petsird")
+    _, bins_py, tof_py, blocks_py = read_petsird(tmp_path / "python.petsird")
+    if selection == "all":
+        assert len(bins_cpp) > len(converted[1]), "the test data should have coincidences that are not true"
+    np.testing.assert_array_equal(bins_py, bins_cpp, "detection bins")
+    np.testing.assert_array_equal(tof_py, tof_cpp, "tof_idx")
+    np.testing.assert_array_equal(blocks_py, blocks_cpp, "time blocks (start, stop, number of events)")
 
 
 def test_number_of_events(converted, true_positions):

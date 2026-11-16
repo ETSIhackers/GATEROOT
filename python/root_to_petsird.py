@@ -15,6 +15,20 @@ import uproot
 C_MM_PER_PS = .299792458
 NCF = np.dtype([('factor','<f4'),('det1','<u4'),('det2','<u4')])
 LEVELS = ('mod','smod','cry')
+# coincidence categories from the GATE truth: same decay (eventID), and number of Compton interactions
+# in the phantom for the two photons together (0: true, 1: single scatter, 2 or more: multiple scatter)
+CATEGORIES = ('true','single-scatter','multiple-scatter','random')
+SELECTION_GROUPS = {'all':CATEGORIES,'scatter':('single-scatter','multiple-scatter')}
+
+
+def selection(text):
+    """comma-separated coincidence categories (true, single-scatter, multiple-scatter, random) or groups (scatter, all)"""
+    chosen=set()
+    for word in text.split(','):
+        if word not in CATEGORIES and word not in SELECTION_GROUPS:
+            raise argparse.ArgumentTypeError(f'unknown selection {word!r}')
+        chosen.update(SELECTION_GROUPS.get(word,(word,)))
+    return tuple(c for c in CATEGORIES if c in chosen)
 
 
 class Geometry:
@@ -147,10 +161,11 @@ def normalization(header, geometry, path):
             'populated_sgid_cells':int(np.count_nonzero(hits))}
 
 
-def event_blocks(tree, geometry, *, offset_ms, duration_ms, delayed_offset_ps=None, true_only=False, limit=None):
+def event_blocks(tree, geometry, *, offset_ms, duration_ms, delayed_offset_ps=None, categories=CATEGORIES, limit=None):
     fields=[key+side for side in ('1','2') for key in
             ('rsectorID','moduleID','submoduleID','crystalID','layerID','gantryID','energy','time')]
-    if true_only:
+    select=tuple(categories)!=CATEGORIES
+    if select:
         fields.extend((key+side) for side in ('1','2') for key in ('eventID','comptonPhantom'))
     last=-1
     pending=[]
@@ -172,8 +187,10 @@ def event_blocks(tree, geometry, *, offset_ms, duration_ms, delayed_offset_ps=No
             energy=rows['energy'+side].astype(np.float64)*1000
             in_window&=(energy>=geometry.energy[0])&(energy<geometry.energy[-1])
         in_window&=(tof>=0)&(tof<len(geometry.tof)-1)&(a!=b)
-        if true_only:
-            in_window&=(rows['eventID1']==rows['eventID2'])&(rows['comptonPhantom1']==0)&(rows['comptonPhantom2']==0)
+        if select:
+            comptons=rows['comptonPhantom1'].astype(np.int64)+rows['comptonPhantom2']
+            category=np.where(rows['eventID1']!=rows['eventID2'],3,np.minimum(comptons,2))  # index in CATEGORIES
+            in_window&=np.isin(category,[CATEGORIES.index(c) for c in categories])
         ticks=ticks[in_window]
         high=np.maximum(a,b)[in_window]
         low=np.minimum(a,b)[in_window]
@@ -245,6 +262,17 @@ def convert(args):
     geometry=Geometry(args.scanner)
     if args.time_mode=='per-file' and (args.file_duration_ms<1 or args.file_duration_ms%geometry.block_ms):
         raise ValueError('File duration must be a positive multiple of the block duration')
+    print(f"Selection: {', '.join(args.selection)}")
+    # print the timing parameters, so that the log of a conversion says which time windows were used
+    tof_half_range=geometry.settings['number_of_TOF_bins']*geometry.settings['TOF_bin_width_mm']/2
+    print('Timing:')
+    print(f'  time mode: per-file (each ROOT file restarts its clock at 0 and starts {args.file_duration_ms} ms after the previous one)'
+          if args.time_mode=='per-file' else '  time mode: absolute (the ROOT files share one clock)')
+    print(f'  time blocks: {geometry.block_ms} ms')
+    print(f"  TOF window: {geometry.settings['number_of_TOF_bins']} bins of {geometry.settings['TOF_bin_width_mm']} mm, "
+          f'from {-tof_half_range:g} to {tof_half_range:g} mm ({-2*tof_half_range/C_MM_PER_PS:g} to {2*tof_half_range/C_MM_PER_PS:g} ps in t1 - t2)')
+    print(f'  delayed coincidences: tree "delay", {args.delayed_offset_ps:g} ps added to t1 - t2'
+          if args.delayed_offset_ps is not None else '  delayed coincidences: not stored',flush=True)
     files=[Path(f'{args.root_prefix}{i}.root') for i in range(1,args.number_of_root_files+1)]
     for path in files:
         if not path.is_file():
@@ -272,7 +300,7 @@ def convert(args):
                           'limit':args.max_events_per_tree}
                     prompts=root['Coincidences']
                     delayed=root['delay'] if args.delayed_offset_ps is not None else None
-                    pf=iter(event_blocks(prompts,geometry,true_only=args.selection=='true',**opts))
+                    pf=iter(event_blocks(prompts,geometry,categories=args.selection,**opts))
                     df=iter(event_blocks(delayed,geometry,delayed_offset_ps=args.delayed_offset_ps,**opts)) if delayed is not None else iter(())
                     a,b=next(pf,None),next(df,None)
                     p_count=d_count=0
@@ -320,7 +348,8 @@ def main():
     cli.add_argument('--time-mode',choices=('absolute','per-file'),required=True)
     cli.add_argument('--file-duration-ms',type=int,default=10_000)
     cli.add_argument('--delayed-offset-ps',type=float)
-    cli.add_argument('--selection',choices=('all','true'),default='all')
+    cli.add_argument('--selection',type=selection,default='all',
+                     help='comma-separated: true, single-scatter, multiple-scatter, random, scatter, all (default)')
     cli.add_argument('--max-events-per-tree',type=int)
     cli.add_argument('--verify',action='store_true')
     args=cli.parse_args()

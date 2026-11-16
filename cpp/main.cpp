@@ -34,6 +34,11 @@
 #include <fstream>
 #include <string>
 #include <vector>
+#include <algorithm>
+#include <array>
+#include <memory>
+#include <optional>
+#include <stdexcept>
 #include "TROOT.h"
 #include "TChain.h"
 #include <cmath>
@@ -49,7 +54,7 @@
 
 using namespace std ;
 
-constexpr float speed_of_light_mm_per_ps = 0.299792458F;
+constexpr double speed_of_light_mm_per_ps = 0.299792458;
 
 #include "petsird_helpers.h"
 
@@ -250,6 +255,10 @@ void usage()
   std::cout << "      --time-mode <absolute|per-file>         absolute (default): the ROOT files share one clock" << std::endl;
   std::cout << "                                              per-file: each ROOT file restarts its clock at 0" << std::endl;
   std::cout << "      --file-duration-ms <ms>                 Duration of each ROOT file with per-file (default 10000)" << std::endl;
+  std::cout << "      --selection <categories>                Comma-separated prompt coincidences to keep: true, single-scatter," << std::endl;
+  std::cout << "                                              multiple-scatter, random, scatter (both scatter), all (default)" << std::endl;
+  std::cout << "      --delayed-offset-ps <ps>                Also store the delayed coincidences of the \"delay\" tree;" << std::endl;
+  std::cout << "                                              the offset of the delayed window is added to t1 - t2" << std::endl;
   std::cout << "  -v, --verbose                               Verbose output" << std::endl;
   std::cout << "  -h, --help                                  Print this help message" << std::endl;
 }
@@ -691,39 +700,108 @@ set_scanner_info(petsird::Header& header, const ScannerGeometry& scannerGeometry
 
 
 
-uint32_t tofToIdx(double tofPos_mm, const petsird::ScannerInformation& scanner_info)
+//! index of the bin that contains value, or nothing if value is outside the bin edges
+std::optional<uint32_t> find_bin(double value, const petsird::BinEdges& bin_edges)
 {
-  constexpr petsird::TypeOfModule type_of_module{ 0 };
-  const auto& tof_bin_edges = scanner_info.tof_bin_edges[type_of_module][type_of_module].edges;
-
-  for (size_t i = 0; i < tof_bin_edges.size() - 1; ++i)
-  {
-    if (tofPos_mm >= tof_bin_edges[i] && tofPos_mm < tof_bin_edges[i+1])
-    {
+  const auto& edges = bin_edges.edges;
+  for (size_t i = 0; i + 1 < edges.size(); ++i)
+    if (value >= edges[i] && value < edges[i+1])
       return static_cast<uint32_t>(i);
-    }
-  }
-  std::cout << "WARNING: TOF out of range: " << tofPos_mm << std::endl;
-  //std::stringstream ss;
-  //ss << "WARNING: TOF out of range: " << tofPos_mm;
-  throw std::runtime_error("TOF out of range");
+  return std::nullopt;
 }
 
-uint32_t energyToIdx(float energy, const petsird::ScannerInformation& scanner_info)
+//! Coincidence categories from the GATE truth: same decay (eventID), and number of Compton interactions
+//! in the phantom for the two photons together (0: true, 1: single scatter, 2 or more: multiple scatter)
+enum CoincidenceCategory { true_coincidence, single_scatter, multiple_scatter, random_coincidence, num_categories };
+const std::array<std::string, num_categories> category_names{ "true", "single-scatter", "multiple-scatter", "random" };
+
+//! Parse a comma-separated selection of categories (true, single-scatter, multiple-scatter, random)
+//! or groups of categories (scatter, all)
+std::array<bool, num_categories> parse_selection(const std::string& text)
 {
-  constexpr petsird::TypeOfModule type_of_module{ 0 };
-  const auto& energy_bin_edges = scanner_info.event_energy_bin_edges[type_of_module].edges;
-  for (size_t i = 0; i < energy_bin_edges.size() - 1; ++i)
-  {
-    if (energy >= energy_bin_edges[i] && energy < energy_bin_edges[i+1])
+  std::array<bool, num_categories> selected{};
+  std::stringstream words(text);
+  std::string word;
+  while (std::getline(words, word, ','))
     {
-      return static_cast<uint32_t>(i);
+      if (word == "all")
+        selected.fill(true);
+      else if (word == "scatter")
+        selected[single_scatter] = selected[multiple_scatter] = true;
+      else
+        {
+          const auto name = std::find(category_names.begin(), category_names.end(), word);
+          if (name == category_names.end())
+            throw std::runtime_error("Unknown selection: " + word);
+          selected[name - category_names.begin()] = true;
+        }
     }
-  }
-  std::stringstream ss;
-  ss << "WARNING: Energy out of range: " << energy;
-  throw std::runtime_error(ss.str());
+  return selected;
 }
+
+//! Branches of a GATE 9 coincidence tree: "Coincidences" for the prompts, "delay" for the delayed coincidences
+struct GateCoincidences
+{
+  TChain chain;
+  Int_t eventID1, eventID2, comptonPhantom1, comptonPhantom2;
+  Int_t gantryID1, gantryID2, rsectorID1, rsectorID2, moduleID1, moduleID2;
+  Int_t submoduleID1, submoduleID2, crystalID1, crystalID2, layerID1, layerID2;
+  Float_t energy1, energy2; // MeV
+  Float_t globalPosX1, globalPosY1, globalPosZ1, globalPosX2, globalPosY2, globalPosZ2; // mm
+  Double_t time1, time2; // s
+
+  GateCoincidences(const char* tree_name, const std::string& root_prefix, int number_of_root_files)
+    : chain(tree_name)
+  {
+    for (int i = 1; i <= number_of_root_files; ++i)
+      {
+        const auto filename = root_prefix + std::to_string(i) + ".root";
+        std::cout << "Input file name is " << filename << " (tree " << tree_name << ")" << std::endl;
+        chain.Add(filename.c_str());
+      }
+    // Read only the branches we need. Since ROOT 6.38, TChain::SetBranchAddress no longer
+    // re-enables a disabled branch, so enable each one explicitly.
+    chain.SetBranchStatus("*", 0);
+    auto set_branch = [&](const char* name, auto* address) {
+      chain.SetBranchStatus(name, 1);
+      chain.SetBranchAddress(name, address);
+    };
+    set_branch("eventID1", &eventID1);
+    set_branch("eventID2", &eventID2);
+    set_branch("comptonPhantom1", &comptonPhantom1);
+    set_branch("comptonPhantom2", &comptonPhantom2);
+    set_branch("gantryID1", &gantryID1);
+    set_branch("gantryID2", &gantryID2);
+    set_branch("rsectorID1", &rsectorID1);
+    set_branch("rsectorID2", &rsectorID2);
+    set_branch("moduleID1", &moduleID1);
+    set_branch("moduleID2", &moduleID2);
+    set_branch("submoduleID1", &submoduleID1);
+    set_branch("submoduleID2", &submoduleID2);
+    set_branch("crystalID1", &crystalID1);
+    set_branch("crystalID2", &crystalID2);
+    set_branch("layerID1", &layerID1);
+    set_branch("layerID2", &layerID2);
+    set_branch("energy1", &energy1);
+    set_branch("energy2", &energy2);
+    set_branch("globalPosX1", &globalPosX1);
+    set_branch("globalPosY1", &globalPosY1);
+    set_branch("globalPosZ1", &globalPosZ1);
+    set_branch("globalPosX2", &globalPosX2);
+    set_branch("globalPosY2", &globalPosY2);
+    set_branch("globalPosZ2", &globalPosZ2);
+    set_branch("time1", &time1);
+    set_branch("time2", &time2);
+  }
+
+  CoincidenceCategory category() const
+  {
+    if (eventID1 != eventID2)
+      return random_coincidence;
+    const int comptons = comptonPhantom1 + comptonPhantom2;
+    return comptons == 0 ? true_coincidence : comptons == 1 ? single_scatter : multiple_scatter;
+  }
+};
 
 petsird::Coordinate mean_position(const petsird::BoxShape& box_shape)
 {
@@ -737,13 +815,14 @@ petsird::Coordinate mean_position(const petsird::BoxShape& box_shape)
   return mean;
 }
 
-auto create_new_time_block(const petsird::ScannerInformation& scanner)
+auto create_new_time_block(const petsird::ScannerInformation& scanner, bool with_delayeds)
 {
   const auto num_module_types = scanner.scanner_geometry.replicated_modules.size();
   petsird::EventTimeBlock time_block;
-  // allocate lists for prompt_events
-  // warning: would have to do the same for delayeds once we store them
+  // allocate lists for prompt_events (and delayed_events)
   time_block.prompt_events = petsird_helpers::create::construct_lower_triangular_matrix<petsird::ListOfCoincidenceEvents>(num_module_types);
+  if (with_delayeds)
+    time_block.delayed_events = petsird_helpers::create::construct_lower_triangular_matrix<petsird::ListOfCoincidenceEvents>(num_module_types);
   return time_block;
 }
 
@@ -756,6 +835,8 @@ int main(int argc, char** argv)
   int number_of_root_files = 2;
   std::string time_mode = "absolute";
   double file_duration_ms = 10000;
+  std::string selection = "all";
+  std::optional<double> delayed_offset_ps;
   bool verbose = false;
   bool store_det_efficiencies = true;
 
@@ -776,6 +857,10 @@ int main(int argc, char** argv)
       time_mode = argv[++i];
     } else if (arg == "--file-duration-ms") {
       file_duration_ms = atof(argv[++i]);
+    } else if (arg == "--selection") {
+      selection = argv[++i];
+    } else if (arg == "--delayed-offset-ps") {
+      delayed_offset_ps = atof(argv[++i]);
     } else if (arg == "-v" || arg == "--verbose") {
       verbose = true;
     } else if (arg == "-h" || arg == "--help") {
@@ -806,6 +891,23 @@ int main(int argc, char** argv)
   }
   const bool per_file_time = time_mode == "per-file";
 
+  std::array<bool, num_categories> selected;
+  try
+    {
+      selected = parse_selection(selection);
+    }
+  catch (const std::runtime_error& e)
+    {
+      std::cerr << e.what() << std::endl;
+      usage();
+      return 1;
+    }
+
+  if (delayed_offset_ps && !std::isfinite(*delayed_offset_ps)) {
+    std::cerr << "--delayed-offset-ps must be finite" << std::endl;
+    return 1;
+  }
+
   if (normalization_file.empty()) {
     store_det_efficiencies=false;
   }
@@ -814,7 +916,11 @@ int main(int argc, char** argv)
   std::cout << "scanner_geometry_file: " << scanner_geometry_file << std::endl;
   std::cout << "normalization file: " << normalization_file << std::endl;
   std::cout << "petsird_file: " << petsird_file << std::endl;
-  std::cout << "time mode: " << time_mode << std::endl;
+  std::cout << "Selection: ";
+  for (int category = 0, printed = 0; category < num_categories; ++category)
+    if (selected[category])
+      std::cout << (printed++ ? ", " : "") << category_names[category];
+  std::cout << std::endl;
 
   // Read scanner geometry
   ScannerGeometry scannerGeometry;
@@ -840,237 +946,227 @@ int main(int argc, char** argv)
     return 1;
   }
 
-  string filedir, inputfilename;
-  Int_t   Trues = 0, Scatters = 0, Randoms = 0;
-
-  //####################################################################
-  //#             Declaration of leaves types - TTree Coincidences     #
-  //####################################################################
-  Float_t         			axialPos, rotationAngle, sinogramS, sinogramTheta;
-  Char_t          			comptVolName1[255], comptVolName2[255];
-  Int_t           			compton1, compton2, gantryID1, gantryID2;
-  Int_t           			runID, sourceID1, sourceID2, eventID1, eventID2;
-  Int_t           			layerID1, layerID2, crystalID1, crystalID2;
-  Int_t           			submoduleID1, submoduleID2, moduleID1, moduleID2, rsectorID1, rsectorID2;
-  Int_t           			comptonPhantom1, comptonPhantom2;
-  Float_t         			energy1, energy2; //in MeV
-  Float_t         			globalPosX1, globalPosX2, globalPosY1, globalPosY2, globalPosZ1, globalPosZ2; //in mm
-  Float_t         			sourcePosX1, sourcePosX2, sourcePosY1, sourcePosY2, sourcePosZ1, sourcePosZ2; //in mm
-  Double_t        			time1, time2; //in sec
-  unsigned long long int   	nentries;
-
-  //######################################################################################
-  //#                        Set branch addresses - TTree Coincidences                   #
-  //######################################################################################
-
-  filedir = root_prefix;
-  TChain *Coincidences = new TChain("Coincidences");
-
-  for (int i = 0; i < number_of_root_files; i++) {
-    std::ostringstream fileNumber;
-    fileNumber << i + 1;
-    inputfilename = filedir + fileNumber.str() + ".root";
-    std::cout << "Input file name is " << inputfilename << std::endl;
-    Coincidences->Add(inputfilename.c_str());
+  // Print the timing parameters, so that the log of a conversion says which time windows were used
+  {
+    const double tof_half_range_mm = scannerGeometry.number_of_TOF_bins * scannerGeometry.TOF_bin_width_mm / 2;
+    std::cout << "Timing:" << std::endl;
+    if (per_file_time)
+      std::cout << "  time mode: per-file (each ROOT file restarts its clock at 0 and starts "
+                << file_duration_ms << " ms after the previous one)" << std::endl;
+    else
+      std::cout << "  time mode: absolute (the ROOT files share one clock)" << std::endl;
+    std::cout << "  time blocks: " << scannerGeometry.LM_time_block_duration_ms << " ms" << std::endl;
+    std::cout << "  TOF window: " << scannerGeometry.number_of_TOF_bins << " bins of " << scannerGeometry.TOF_bin_width_mm
+              << " mm, from " << -tof_half_range_mm << " to " << tof_half_range_mm << " mm ("
+              << -2 * tof_half_range_mm / speed_of_light_mm_per_ps << " to " << 2 * tof_half_range_mm / speed_of_light_mm_per_ps
+              << " ps in t1 - t2)" << std::endl;
+    if (delayed_offset_ps)
+      std::cout << "  delayed coincidences: tree \"delay\", " << *delayed_offset_ps << " ps added to t1 - t2" << std::endl;
+    else
+      std::cout << "  delayed coincidences: not stored" << std::endl;
   }
 
+  // GATE coincidences: the prompts, and the delayed coincidences if asked for
+  GateCoincidences prompts("Coincidences", root_prefix, number_of_root_files);
+  std::unique_ptr<GateCoincidences> delayeds;
+  if (delayed_offset_ps)
+    delayeds = std::make_unique<GateCoincidences>("delay", root_prefix, number_of_root_files);
 
-  // Read only the branches we need. Since ROOT 6.38, TChain::SetBranchAddress no longer
-  // re-enables a disabled branch, so enable each one explicitly.
-  Coincidences->SetBranchStatus("*",0);
-  auto set_branch = [&](const char* name, auto* address) {
-    Coincidences->SetBranchStatus(name, 1);
-    Coincidences->SetBranchAddress(name, address);
-  };
-  set_branch("axialPos",&axialPos);
-  set_branch("comptVolName1",&comptVolName1);
-  set_branch("comptVolName2",&comptVolName2);
-  set_branch("comptonCrystal1",&compton1);
-  set_branch("comptonCrystal2",&compton2);
-  set_branch("crystalID1",&crystalID1);
-  set_branch("crystalID2",&crystalID2);
-  set_branch("comptonPhantom1",&comptonPhantom1);
-  set_branch("comptonPhantom2",&comptonPhantom2);
-  set_branch("energy1",&energy1);
-  set_branch("energy2",&energy2);
-  set_branch("eventID1",&eventID1);
-  set_branch("eventID2",&eventID2);
-  set_branch("globalPosX1",&globalPosX1);
-  set_branch("globalPosX2",&globalPosX2);
-  set_branch("globalPosY1",&globalPosY1);
-  set_branch("globalPosY2",&globalPosY2);
-  set_branch("globalPosZ1",&globalPosZ1);
-  set_branch("globalPosZ2",&globalPosZ2);
-  set_branch("layerID1",&layerID1);
-  set_branch("layerID2",&layerID2);
-  set_branch("moduleID1",&moduleID1);
-  set_branch("moduleID2",&moduleID2);
-  set_branch("rotationAngle",&rotationAngle);
-  set_branch("rsectorID1",&rsectorID1);
-  set_branch("rsectorID2",&rsectorID2);
-  set_branch("runID",&runID);
-  set_branch("sinogramS",&sinogramS);
-  set_branch("sinogramTheta",&sinogramTheta);
-  set_branch("sourceID1",&sourceID1);
-  set_branch("sourceID2",&sourceID2);
-  set_branch("sourcePosX1",&sourcePosX1);
-  set_branch("sourcePosX2",&sourcePosX2);
-  set_branch("sourcePosY1",&sourcePosY1);
-  set_branch("sourcePosY2",&sourcePosY2);
-  set_branch("sourcePosZ1",&sourcePosZ1);
-  set_branch("sourcePosZ2",&sourcePosZ2);
-  set_branch("submoduleID1",&submoduleID1);
-  set_branch("submoduleID2",&submoduleID2);
-  set_branch("time1",&time1);
-  set_branch("time2",&time2);
-  set_branch("gantryID1",&gantryID1);
-  set_branch("gantryID2",&gantryID2);
-
-  nentries = (unsigned long long int)(Coincidences->GetEntries());
-
-  printf("Total Number of Coincidence Events in the ROOT file:= %llu \n",nentries );
+  printf("Total Number of Coincidence Events in the ROOT file:= %lld \n", prompts.chain.GetEntries());
 
   // Output PETSIRD
   petsird::Header header;
   set_scanner_info(header, scannerGeometry, store_det_efficiencies);
+  if (delayeds)
+    header.scanner.delayed_event_policy = petsird::CoincidencePolicy::kOther;
 
   if (store_det_efficiencies) {
     SetEfficienciesFromFile(header.scanner, scannerGeometry, normalization_file);
   }
-	
+
   auto& scanner = header.scanner;
+  const petsird::TypeOfModule type_of_module{ 0 };
+  const auto& energy_bin_edges = scanner.event_energy_bin_edges[type_of_module];
+  const auto& tof_bin_edges = scanner.tof_bin_edges[type_of_module][type_of_module];
 
   if (verbose) {
     // Print scanner information
     std::cout << "Scanner information:" << std::endl;
-    constexpr petsird::TypeOfModule type_of_module{ 0 };
-    const auto& tof_bin_edges = header.scanner.tof_bin_edges[type_of_module][type_of_module];
-    const auto num_tof_bins = tof_bin_edges.NumberOfBins();
-    std::cout << "Number of TOF bins: " << num_tof_bins << std::endl;
+    std::cout << "Number of TOF bins: " << tof_bin_edges.NumberOfBins() << std::endl;
     std::cout << "TOF bin edges (mm): " << tof_bin_edges.edges << std::endl;
-    const auto TOF_resolution_mm = header.scanner.tof_resolution[type_of_module][type_of_module];
+    const auto TOF_resolution_mm = scanner.tof_resolution[type_of_module][type_of_module];
     std::cout << "TOF resolution : " << TOF_resolution_mm << " mm = " << TOF_resolution_mm / (speed_of_light_mm_per_ps / 2) << " ps\n";
-    const auto& event_energy_bin_edges = header.scanner.event_energy_bin_edges[type_of_module];
-    const auto num_event_energy_bins = event_energy_bin_edges.NumberOfBins();
-    std::cout << "Number of energy bins: " << num_event_energy_bins << std::endl;
-    std::cout << "Event energy bin edges: " << event_energy_bin_edges.edges << std::endl;
+    std::cout << "Number of energy bins: " << energy_bin_edges.NumberOfBins() << std::endl;
+    std::cout << "Event energy bin edges: " << energy_bin_edges.edges << std::endl;
   }
 
   // Write PETSiRD file
   petsird::binary::PETSIRDWriter writer(petsird_file);
   writer.WriteHeader(header);
 
-  long current_time_block = -1;
-  long last_time_block = -1;
-  auto time_block = create_new_time_block(header.scanner);
-
   const auto event_time_block_duration = scannerGeometry.LM_time_block_duration_ms; // ms
-  const petsird::TypeOfModule type_of_module{ 0 };
-  unsigned long Counts_binned = 0;
-  for (unsigned long long int i = 0 ; i < nentries ; i++)
+
+  // Convert the current coincidence of a tree. As in the Python converter, coincidences with an energy outside
+  // the energy window or a TOF outside the TOF bins are not stored (returns false).
+  // offset_ps is added to t1 - t2 (the offset of the delayed coincidence window, 0 for the prompts).
+  auto convert_coincidence = [&](const GateCoincidences& c, double offset_ps, petsird::CoincidenceEvent& event)
   {
-    if (i % 1000000 == 0) {
-      printf("Processing event %llu of %llu, (%f percent)\n", i, nentries, 100.0f*i/nentries);
+    const auto energy_index1 = find_bin(1.0e3 * c.energy1, energy_bin_edges); // keV
+    const auto energy_index2 = find_bin(1.0e3 * c.energy2, energy_bin_edges);
+    if (!energy_index1 || !energy_index2)
+      return false;
+
+    petsird::ExpandedDetectionBin expanded_detection_bin;
+    expanded_detection_bin.module_index = calculate_module_index(c.gantryID1, c.rsectorID1, scannerGeometry);
+    expanded_detection_bin.element_index = calculate_element_index(c.moduleID1, c.submoduleID1, c.crystalID1, c.layerID1, scannerGeometry);
+    expanded_detection_bin.energy_index = *energy_index1;
+    event.detection_bins[0] = petsird_helpers::make_detection_bin(scanner, type_of_module, expanded_detection_bin);
+    expanded_detection_bin.module_index = calculate_module_index(c.gantryID2, c.rsectorID2, scannerGeometry);
+    expanded_detection_bin.element_index = calculate_element_index(c.moduleID2, c.submoduleID2, c.crystalID2, c.layerID2, scannerGeometry);
+    expanded_detection_bin.energy_index = *energy_index2;
+    event.detection_bins[1] = petsird_helpers::make_detection_bin(scanner, type_of_module, expanded_detection_bin);
+    if (event.detection_bins[0] == event.detection_bins[1])
+      return false;
+
+    // TOF position (t1 - t2) * c / 2, with t1 the arrival time on detection_bins[0];
+    // ensure correct order (detection_bins[0] > detection_bins[1]), which changes the sign of the TOF
+    double tofPos_mm = (1.0e12 * (c.time1 - c.time2) + offset_ps) * speed_of_light_mm_per_ps / 2;
+    if (event.detection_bins[0] < event.detection_bins[1]) {
+      std::swap(event.detection_bins[0], event.detection_bins[1]);
+      tofPos_mm = -tofPos_mm;
     }
+    const auto tof_index = find_bin(tofPos_mm, tof_bin_edges);
+    if (!tof_index)
+      return false;
+    event.tof_idx = *tof_index;
+    return true;
+  };
 
-    Coincidences->GetEntry(i);
+  auto print_event = [&](const GateCoincidences& c, const petsird::CoincidenceEvent& event, Long64_t entry)
+  {
+    std::cout << "Event " << entry << std::endl;
+    const auto expanded_detection_bin0 = petsird_helpers::expand_detection_bin(scanner, type_of_module, event.detection_bins[0]);
+    const auto expanded_detection_bin1 = petsird_helpers::expand_detection_bin(scanner, type_of_module, event.detection_bins[1]);
+    std::cout << "    "
+              << "[ExpandedDetectionBin(module=" << expanded_detection_bin0.module_index << ", "
+              << "el=" << expanded_detection_bin0.element_index << ", "
+              << "energy_index=" << expanded_detection_bin0.energy_index
+              << "), ExpandedDetectionBin(module=" << expanded_detection_bin1.module_index << ", "
+              << "el=" << expanded_detection_bin1.element_index << ", "
+              << "energy_index=" << expanded_detection_bin1.energy_index << ")]\n";
+    std::cout << "  tof_idx: " << event.tof_idx << std::endl;
+    std::cout << "gantryID1=" << c.gantryID1 << ", rsectorID1=" << c.rsectorID1
+              << ", moduleID1=" << c.moduleID1 << ", submoduleID1=" << c.submoduleID1 << ", crystalID1=" << c.crystalID1 << '\n';
+    std::cout << "gantryID2=" << c.gantryID2 << ", rsectorID2=" << c.rsectorID2
+              << ", moduleID2=" << c.moduleID2 << ", submoduleID2=" << c.submoduleID2 << ", crystalID2=" << c.crystalID2 << '\n';
+    const auto mean_pos0 = mean_position(petsird_helpers::geometry::get_detecting_box(scanner, type_of_module, expanded_detection_bin0));
+    const auto mean_pos1 = mean_position(petsird_helpers::geometry::get_detecting_box(scanner, type_of_module, expanded_detection_bin1));
+    std::cout << "  pos 1           : " << mean_pos0.c[0] << ", " << mean_pos0.c[1] << ", " << mean_pos0.c[2] << "\n";
+    std::cout << "  pos 2           : " << mean_pos1.c[0] << ", " << mean_pos1.c[1] << ", " << mean_pos1.c[2] << "\n";
+    std::cout << "  GlobalPosition 1: " << c.globalPosX1 << ", " << c.globalPosY1 << ", " << c.globalPosZ1 << std::endl;
+    std::cout << "  Distance 1: " << std::sqrt(std::pow(mean_pos0.c[0]-c.globalPosX1, 2) + std::pow(mean_pos0.c[1]-c.globalPosY1, 2)
+                                               + std::pow(mean_pos0.c[2]-c.globalPosZ1, 2)) << std::endl;
+    std::cout << "  GlobalPosition 2: " << c.globalPosX2 << ", " << c.globalPosY2 << ", " << c.globalPosZ2 << std::endl;
+    std::cout << "  Distance 2: " << std::sqrt(std::pow(mean_pos1.c[0]-c.globalPosX2, 2) + std::pow(mean_pos1.c[1]-c.globalPosY2, 2)
+                                               + std::pow(mean_pos1.c[2]-c.globalPosZ2, 2)) << std::endl;
+  };
 
-    // time in ms since the start of the acquisition
-    double time_ms = time1*1.0e3;
-    if (per_file_time) {
-      if (time_ms < 0 || time_ms >= file_duration_ms) {
-        std::cerr << "Error: event at " << time_ms << " ms in ROOT file " << Coincidences->GetTreeNumber() + 1
-                  << " is outside 0-" << file_duration_ms << " ms. Check --file-duration-ms." << std::endl;
-        return 1;
+  // A stream of coincidences (prompts or delayed), read in time order
+  struct Stream
+  {
+    GateCoincidences* tree;
+    bool delayed;
+    Long64_t next_entry;
+    long last_time_block;
+  };
+  unsigned long num_read[2] = { 0, 0 }, num_stored[2] = { 0, 0 }, num_outside_windows[2] = { 0, 0 };
+  std::array<unsigned long, num_categories> num_per_category{}; // among the prompts read
+
+  // Read the next coincidence of a stream that is stored, with its time block. Returns false at the end.
+  auto next_coincidence = [&](Stream& s, long& time_block_index, petsird::CoincidenceEvent& event)
+  {
+    auto& c = *s.tree;
+    const Long64_t num_entries = c.chain.GetEntries();
+    while (s.next_entry < num_entries)
+      {
+        const Long64_t entry = s.next_entry++;
+        if (!s.delayed && entry % 1000000 == 0)
+          printf("Processing event %lld of %lld, (%f percent)\n", entry, num_entries, 100.0f*entry/num_entries);
+        c.chain.GetEntry(entry);
+        const int root_file = c.chain.GetTreeNumber() + 1;
+
+        // time in ms since the start of the acquisition
+        double time_ms = c.time1*1.0e3;
+        if (time_ms < 0 || (per_file_time && time_ms >= file_duration_ms))
+          throw std::runtime_error("event at " + std::to_string(time_ms) + " ms in ROOT file " + std::to_string(root_file)
+                                   + (per_file_time ? " is outside 0-" + std::to_string(file_duration_ms) + " ms. Check --file-duration-ms."
+                                                    : " has a negative time."));
+        if (per_file_time)
+          time_ms += (root_file - 1) * file_duration_ms;
+        const long this_time_block = static_cast<long>(time_ms / event_time_block_duration);
+        if (this_time_block < s.last_time_block)
+          throw std::runtime_error("time goes back in ROOT file " + std::to_string(root_file)
+                                   + ". If each ROOT file restarts its clock, use --time-mode per-file.");
+        s.last_time_block = this_time_block;
+
+        ++num_read[s.delayed];
+        if (!s.delayed)
+          {
+            const auto category = c.category();
+            ++num_per_category[category];
+            if (!selected[category])
+              continue;
+          }
+        if (!convert_coincidence(c, s.delayed ? *delayed_offset_ps : 0., event))
+          {
+            ++num_outside_windows[s.delayed];
+            continue;
+          }
+        if (verbose && !s.delayed && entry % 100000 == 0)
+          print_event(c, event, entry);
+        ++num_stored[s.delayed];
+        time_block_index = this_time_block;
+        return true;
       }
-      time_ms += Coincidences->GetTreeNumber() * file_duration_ms;
+    return false;
+  };
+
+  // Write the time blocks that have coincidences, with the prompts and delayed coincidences of each block
+  try
+    {
+      Stream prompt_stream{ &prompts, false, 0, -1 };
+      Stream delayed_stream{ delayeds.get(), true, 0, -1 };
+      long prompt_block = 0, delayed_block = 0;
+      petsird::CoincidenceEvent prompt_event, delayed_event;
+      bool has_prompt = next_coincidence(prompt_stream, prompt_block, prompt_event);
+      bool has_delayed = delayeds && next_coincidence(delayed_stream, delayed_block, delayed_event);
+      while (has_prompt || has_delayed)
+        {
+          const long block = !has_delayed ? prompt_block : !has_prompt ? delayed_block : std::min(prompt_block, delayed_block);
+          auto time_block = create_new_time_block(scanner, delayeds != nullptr);
+          time_block.time_interval.start = static_cast<uint32_t>(block * event_time_block_duration);
+          time_block.time_interval.stop = static_cast<uint32_t>((block + 1) * event_time_block_duration);
+          for (; has_prompt && prompt_block == block; has_prompt = next_coincidence(prompt_stream, prompt_block, prompt_event))
+            time_block.prompt_events[type_of_module][type_of_module].push_back(prompt_event);
+          for (; has_delayed && delayed_block == block; has_delayed = next_coincidence(delayed_stream, delayed_block, delayed_event))
+            time_block.delayed_events[type_of_module][type_of_module].push_back(delayed_event);
+          writer.WriteTimeBlocks(time_block);
+        }
     }
-    const long this_time_block = static_cast<long>(time_ms / event_time_block_duration);
-    if (this_time_block < last_time_block) {
-      std::cerr << "Error: time goes back in ROOT file " << Coincidences->GetTreeNumber() + 1
-                << ". If each ROOT file restarts its clock, use --time-mode per-file." << std::endl;
+  catch (const std::runtime_error& e)
+    {
+      std::cerr << "Error: " << e.what() << std::endl;
       return 1;
     }
-    last_time_block = this_time_block;
-
-    if (eventID1 == eventID2)
-    {
-	    if (comptonPhantom1 == 0 && comptonPhantom2 == 0) {
-        petsird::CoincidenceEvent event;
-        petsird::ExpandedDetectionBin expanded_detection_bin;
-        expanded_detection_bin.module_index = calculate_module_index(gantryID1, rsectorID1, scannerGeometry);
-        expanded_detection_bin.element_index = calculate_element_index(moduleID1, submoduleID1, crystalID1, layerID1, scannerGeometry);
-        expanded_detection_bin.energy_index = static_cast<uint32_t>(energyToIdx(1.0e3*energy1, scanner));
-        event.detection_bins[0] = petsird_helpers::make_detection_bin(header.scanner, type_of_module, expanded_detection_bin);
-        expanded_detection_bin.module_index = calculate_module_index(gantryID2, rsectorID2, scannerGeometry);
-        expanded_detection_bin.element_index = calculate_element_index(moduleID2, submoduleID2, crystalID2, layerID2, scannerGeometry);
-        expanded_detection_bin.energy_index = static_cast<uint32_t>(energyToIdx(1.0e3*energy2, scanner));
-        event.detection_bins[1] = petsird_helpers::make_detection_bin(header.scanner, type_of_module, expanded_detection_bin);
-        const double tofPos_mm = 1.0e12 * (time1 - time2) * speed_of_light_mm_per_ps / 2; //in mm
-        event.tof_idx = tofToIdx(tofPos_mm, scanner);
-
-        // ensure correct order
-        if (event.detection_bins[0] < event.detection_bins[1]) {
-          swap(event.detection_bins[0], event.detection_bins[1]);
-          const auto num_tof_bins = header.scanner.tof_bin_edges[type_of_module][type_of_module].NumberOfBins();
-          event.tof_idx = num_tof_bins - 1 - event.tof_idx;
-        }
-
-        if (verbose && i%100000 == 0) {
-          std::cout << "Event " << i << std::endl;
-          const auto expanded_detection_bin0
-            = petsird_helpers::expand_detection_bin(header.scanner, type_of_module, event.detection_bins[0]);
-          const auto expanded_detection_bin1
-            = petsird_helpers::expand_detection_bin(header.scanner, type_of_module, event.detection_bins[1]);
-          std::cout << "    "
-                    << "[ExpandedDetectionBin(module=" << expanded_detection_bin0.module_index << ", "
-                    << "el=" << expanded_detection_bin0.element_index << ", "
-                    << "energy_index=" << expanded_detection_bin0.energy_index
-                    << "), ExpandedDetectionBin(module=" << expanded_detection_bin1.module_index << ", "
-                    << "el=" << expanded_detection_bin1.element_index << ", "
-                    << "energy_index=" << expanded_detection_bin1.energy_index << ")]\n";
-          std::cout << "  tof_idx: " << event.tof_idx << std::endl;
-          std::cout << "gantryID1=" << gantryID1 << ", rsectorID1=" << rsectorID1
-                    << ", moduleID1=" << moduleID1 << ", submoduleID1=" << submoduleID1 << ", crystalID1=" << crystalID1 << '\n';
-          std::cout << "gantryID2=" << gantryID2 << ", rsectorID2=" << rsectorID2
-                    << ", moduleID2=" << moduleID2 << ", submoduleID2=" << submoduleID2 << ", crystalID2=" << crystalID2 << '\n';
-          const auto box_shape0 = petsird_helpers::geometry::get_detecting_box(header.scanner, type_of_module, expanded_detection_bin0);
-          const auto mean_pos0 = mean_position(box_shape0);
-          const auto box_shape1 = petsird_helpers::geometry::get_detecting_box(header.scanner, type_of_module, expanded_detection_bin1);
-          const auto mean_pos1 = mean_position(box_shape1);
-          std::cout << "  pos 1           : " << mean_pos0.c[0] << ", " << mean_pos0.c[1] << ", " << mean_pos0.c[2] << "\n";
-          std::cout << "  pos 2           : " << mean_pos1.c[0] << ", " << mean_pos1.c[1] << ", " << mean_pos1.c[2] << "\n";
-
-          std::cout << "  GlobalPosition 1: " << globalPosX1 << ", " << globalPosY1 << ", " << globalPosZ1 << std::endl;
-          float distance_1 = std::sqrt(std::pow(mean_pos0.c[0]-globalPosX1, 2) + std::pow(mean_pos0.c[1]-globalPosY1, 2) + std::pow(mean_pos0.c[2]-globalPosZ1, 2));
-          std::cout << "  Distance 1: " << distance_1 << std::endl;
-          std::cout << "  GlobalPosition 2: " << globalPosX2 << ", " << globalPosY2 << ", " << globalPosZ2 << std::endl;
-          float distance_2 = std::sqrt(std::pow(mean_pos1.c[0]-globalPosX2, 2) + std::pow(mean_pos1.c[1]-globalPosY2, 2) + std::pow(mean_pos1.c[2]-globalPosZ2, 2));
-          std::cout << "  Distance 2: " << distance_2 << std::endl;
-        }
-        if (this_time_block != current_time_block) {
-          if (current_time_block != -1) {
-            writer.WriteTimeBlocks(time_block);
-          }
-          current_time_block = this_time_block;
-          time_block = create_new_time_block(header.scanner);
-          time_block.time_interval.start = time_ms;
-          time_block.time_interval.stop = time_ms + event_time_block_duration;
-        }
-        time_block.prompt_events[type_of_module][type_of_module].push_back(event);
-        Counts_binned++;
-        Trues++;
-      } else {
-        Scatters++;
-      }
-	  } else {
-      Randoms++;
-    }
-  }
-  writer.WriteTimeBlocks(time_block);
   writer.EndTimeBlocks();
   writer.Close();
 
-  printf("Total Number of Coincidence Events in the ROOT file:= %llu ...\n",nentries );
-  printf("Total Number of Coincidence Events registered in list-mode or sinogram format:= %lu ...\n", Counts_binned);  return(0);
+  printf("Prompt coincidences read: %lu (true %lu, single-scatter %lu, multiple-scatter %lu, random %lu); stored: %lu;"
+         " outside the energy or TOF windows: %lu\n", num_read[0], num_per_category[true_coincidence],
+         num_per_category[single_scatter], num_per_category[multiple_scatter], num_per_category[random_coincidence],
+         num_stored[0], num_outside_windows[0]);
+  if (delayeds)
+    printf("Delayed coincidences read: %lu; stored: %lu; outside the energy or TOF windows: %lu\n",
+           num_read[1], num_stored[1], num_outside_windows[1]);
+  return 0;
 }
