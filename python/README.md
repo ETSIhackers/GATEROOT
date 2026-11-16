@@ -1,7 +1,8 @@
 # Standalone Windows Python converter
 
-This entry point uses the official PETSIRD 0.13.2 Python SDK and uproot. It
-accepts the cylinder JSON and numbered ROOT prefixes used by the C++ justfile.
+This entry point uses the official PETSIRD 0.13 Python SDK (0.13.3 or later)
+and uproot. It accepts the cylinder JSON and numbered ROOT prefixes used by the
+C++ justfile.
 The supported scanner profile is the one used by ETSIPETscanner1 and
 ETSIPETscanner2: one ring of replicated rsectors, one DOI layer, one coincidence
 energy bin, and no gaps or virtual crystals. It does not require CERN ROOT.

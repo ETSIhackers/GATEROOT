@@ -1,4 +1,4 @@
-"""Convert cylindrical ETSIPET GATE ROOT data to binary PETSIRD 0.13.2."""
+"""Convert cylindrical ETSIPET GATE ROOT data to binary PETSIRD 0.13."""
 
 import argparse
 import json
@@ -239,8 +239,9 @@ def verify(path, geometry, report):
 
 
 def convert(args):
-    if version('petsird')!='0.13.2':
-        raise ValueError('Install PETSIRD 0.13.2 for this converter')
+    major,minor,patch=(int(x) for x in version('petsird').split('.')[:3])
+    if (major,minor)!=(0,13) or patch<3:
+        raise ValueError('Install PETSIRD >=0.13.3,<0.14 for this converter')
     geometry=Geometry(args.scanner)
     if args.time_mode=='per-file' and (args.file_duration_ms<1 or args.file_duration_ms%geometry.block_ms):
         raise ValueError('File duration must be a positive multiple of the block duration')
