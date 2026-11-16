@@ -286,10 +286,12 @@ void calculate_scanner_layer_xyz_coordinates(unsigned int& rsec_z_id, unsigned i
   rsec_xy_id = ( global_element_index % (scannerGeometry.n_rsec_xy*scannerGeometry.n_mod_xy*scannerGeometry.n_smod_xy*scannerGeometry.n_cry_xy*scannerGeometry.n_cry_layers)) 
                                       / (scannerGeometry.n_mod_xy*scannerGeometry.n_smod_xy*scannerGeometry.n_cry_xy*scannerGeometry.n_cry_layers);
 
-  mod_z_id = ( global_element_index / (scannerGeometry.n_rsec_xy*scannerGeometry.n_mod_xy*scannerGeometry.n_smod_xy*scannerGeometry.n_cry_xy*scannerGeometry.n_cry_layers)) % scannerGeometry.n_mod_z;                          
+  mod_z_id = ( global_element_index / (scannerGeometry.n_rsec_xy*scannerGeometry.n_mod_xy*scannerGeometry.n_smod_xy*scannerGeometry.n_cry_xy*scannerGeometry.n_cry_layers)
+                                    / (scannerGeometry.n_smod_z*scannerGeometry.n_cry_z)) % scannerGeometry.n_mod_z;
   mod_xy_id = (global_element_index / (scannerGeometry.n_smod_xy*scannerGeometry.n_cry_xy*scannerGeometry.n_cry_layers)) % scannerGeometry.n_mod_xy;
 
-  smod_z_id = ( global_element_index / (scannerGeometry.n_rsec_xy*scannerGeometry.n_mod_xy*scannerGeometry.n_smod_xy*scannerGeometry.n_cry_xy*scannerGeometry.n_cry_layers)) % scannerGeometry.n_smod_z;                          
+  smod_z_id = ( global_element_index / (scannerGeometry.n_rsec_xy*scannerGeometry.n_mod_xy*scannerGeometry.n_smod_xy*scannerGeometry.n_cry_xy*scannerGeometry.n_cry_layers)
+                                     / scannerGeometry.n_cry_z) % scannerGeometry.n_smod_z;
   smod_xy_id = ( global_element_index / (scannerGeometry.n_cry_xy*scannerGeometry.n_cry_layers)) % scannerGeometry.n_smod_xy;
 
   cry_z_id = ( global_element_index / (scannerGeometry.n_rsec_xy*scannerGeometry.n_mod_xy*scannerGeometry.n_smod_xy*scannerGeometry.n_cry_xy*scannerGeometry.n_cry_layers)) % scannerGeometry.n_cry_z;                          
@@ -314,9 +316,10 @@ void calculate_scanner_layer_coordinates(unsigned int& rsec_id, unsigned int& mo
   //index order according to TX position in each ring: first the structures of the 1st TX position along all rings, then of the 2nd TX position etc.
   //this complies with current module_pair_SGID_LUT conventions in the persird_helper petsird_generator example
   rsec_id = rsec_z_id + rsec_xy_id*scannerGeometry.n_rsec_z;
-  mod_id = mod_z_id + mod_xy_id*scannerGeometry.n_mod_z;
-  smod_id = smod_z_id + smod_xy_id*scannerGeometry.n_smod_z;
-  cry_id = cry_z_id + cry_xy_id*scannerGeometry.n_cry_z;	
+  // inside a module, use the same order as the GATE IDs (xy first), as calculate_element_index() expects
+  mod_id = mod_xy_id + mod_z_id*scannerGeometry.n_mod_xy;
+  smod_id = smod_xy_id + smod_z_id*scannerGeometry.n_smod_xy;
+  cry_id = cry_xy_id + cry_z_id*scannerGeometry.n_cry_xy;
 }
 
 int calculate_module_index(unsigned int gantry_id, unsigned int rsector_id, const ScannerGeometry& scannerGeometry)
