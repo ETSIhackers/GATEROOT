@@ -140,10 +140,11 @@ def normalization(header, geometry, path):
         matrices.append(p.ModulePairEfficiencies(sgid=sgid,values=values))
     header.scanner.detection_efficiencies=p.DetectionEfficiencies(
         calibration_factor=float(fields.get('calibration factor',1.)),
-        method_description='Inverse CASToR NCFs averaged by angular sector difference and GATE local detector IDs',
+        detection_bin_efficiencies=[[1.0]*geometry.detectors],
         module_pair_sgidlut=[[[[i-j-1 for j in range(i+1)] for i in range(geometry.modules)]]],
         module_pair_efficiencies_vectors=[[matrices]])
     return {'normalization_records':count,'sgid_matrices':len(matrices),
+            'normalization_method':'Inverse CASToR NCFs averaged by angular sector difference and GATE local detector IDs',
             'populated_sgid_cells':int(np.count_nonzero(hits))}
 
 
@@ -207,6 +208,10 @@ def verify(path, geometry, report):
         efficiency=scanner.detection_efficiencies
         matrices=None
         if report['sgid_matrices']:
+            vectors=efficiency.detection_bin_efficiencies if efficiency is not None else []
+            if (len(vectors)!=1 or len(vectors[0])!=geometry.detectors
+                    or not np.all(np.asarray(vectors[0])==1.0)):
+                raise ValueError('PETSIRD round-trip detection-bin efficiencies must contain one unity value per detector bin')
             groups=efficiency.module_pair_efficiencies_vectors[0][0]
             if len(groups)!=report['sgid_matrices'] or any(group.sgid!=i for i,group in enumerate(groups)):
                 raise ValueError('PETSIRD round-trip SGID mismatch')

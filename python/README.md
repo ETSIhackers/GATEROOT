@@ -33,6 +33,9 @@ a limited ROOT test. It inverts positive NCFs, remaps ring-major CASToR IDs
 to the GATE hierarchy, and averages inverse factors into rotation-symmetry
 matrices. Zero values are retained in the pooling, and cells without any
 input records have zero efficiency.
+With `-c`, the PETSIRD header also stores one explicit unity efficiency per
+detection bin, as the C++ converter does. The normalization method is recorded
+in the Python JSON audit.
 
 ```powershell
 $Base = 'F:\DATA\WCMC\ETSIhackathon'
