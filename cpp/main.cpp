@@ -628,7 +628,11 @@ set_scanner_info(petsird::Header& header, const ScannerGeometry& scannerGeometry
                                                                      /* allocate_detection_bin_efficiencies = */ store_det_efficiencies,
                                                                      /* allocate_module_pair_efficiencies = */ store_det_efficiencies);
 
-  // TODO scanner_info.bulk_materials
+  // material of the crystals (material_id 1 in get_crystal()); the geometry file does not say which one
+  petsird::BulkMaterial crystal_material;
+  crystal_material.id = 1;
+  crystal_material.name = "GATE scintillator";
+  scanner_info.bulk_materials.push_back(crystal_material);
 
   // geometry
   scanner_info.scanner_geometry = get_scanner_geometry(scannerGeometry);
@@ -667,8 +671,9 @@ set_scanner_info(petsird::Header& header, const ScannerGeometry& scannerGeometry
   if (store_det_efficiencies)
     set_detection_efficiencies(scanner_info, scannerGeometry); // initialize all valid efficiencies with the value of 1
 
-  // TODO depends on GATE config of course
-  scanner_info.prompt_event_policy = petsird::CoincidencePolicy::kMultiplesAsSequentialCoincidences;
+  // depends on the GATE config; the default multiples policy (takeWinnerOfGoods) keeps one pair per multiple,
+  // which is none of the listed policies
+  scanner_info.prompt_event_policy = petsird::CoincidencePolicy::kOther;
   scanner_info.delayed_event_policy = petsird::CoincidencePolicy::kNone;
   scanner_info.single_event_policy = petsird::SingleEventPolicy::kNone;
   scanner_info.triple_event_policy = petsird::TripleEventPolicy::kNone;
