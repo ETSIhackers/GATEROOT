@@ -142,7 +142,40 @@ def spool_file(job):
                     runs.append(str(target))
                     totals[kind] += len(data)
                 entry += len(rows['time1'])
+    runs = merge_file_runs(runs, directory, index, geometry.block_ms)
     return runs, {'file': str(path), 'offset_ms': offset, 'prompts': totals[0], 'delayeds': totals[1]}
+
+
+def merge_file_runs(runs, directory, index, block_ms):
+    """Bound open mappings to 32 per merge, even for thousands of input batches."""
+    generation = 0
+    while len(runs) > 1:
+        combined = []
+        for start in range(0,len(runs),32):
+            group = runs[start:start+32]
+            count = 0
+            for path in group:
+                source = np.load(path,mmap_mode='r')
+                count += len(source)
+                source._mmap.close()
+            target = Path(directory)/f'merge_{index}_{generation}_{start}.npy'
+            output = np.lib.format.open_memmap(target,mode='w+',dtype=RECORD,shape=(count,))
+            try:
+                position = 0
+                for _, data in ordered_blocks(group,block_ms):
+                    output[position:position+len(data)] = data
+                    position += len(data)
+                if position != count:
+                    raise ValueError('Sorted spool merge lost events')
+                output.flush()
+            finally:
+                output._mmap.close()
+            for path in group:
+                Path(path).unlink()
+            combined.append(str(target))
+        runs = combined
+        generation += 1
+    return runs
 
 
 def ordered_blocks(runs, block_ms):
