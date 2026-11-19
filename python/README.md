@@ -1,5 +1,10 @@
 # Standalone Windows Python converter
 
+**GATEROOT 1.0.0 / PETSIRD 0.13.3.** For the current execution modes and clock/window
+defaults see [the CLI guide](../docs/PARALLEL_CONVERSION.md). For the complete
+Windows/WSL prompts+delayeds conversion and EMITRON scatter-corrected reconstruction
+workflow see [the workstation guide](../docs/WORKSTATION.md).
+
 This entry point uses the official PETSIRD 0.13 Python SDK (0.13.3 or later)
 and uproot. It accepts the cylinder JSON and numbered ROOT prefixes used by the
 C++ justfile.
@@ -9,8 +14,8 @@ see the main README for the GATE repeaters): one DOI layer, one coincidence
 energy bin, and no gaps or virtual crystals. It does not require CERN ROOT.
 
 ```powershell
-conda create -n gateroot-petsird0132 -y python=3.12 pip
-conda activate gateroot-petsird0132
+conda create -n gateroot-100 -y python=3.12 pip
+conda activate gateroot-100
 python -m pip install -r .\python\requirements.txt
 python .\python\root_to_petsird.py --help
 ```
@@ -21,11 +26,11 @@ example's same-event, no-phantom-Compton selection. Supply
 `--delayed-offset-ps 500000` for the matching `delay` tree in these datasets.
 The offset is added to `time1-time2` before endpoint canonicalization.
 
-The IEC ROOT files restart their clock for each 10-second file. Use
-`--time-mode per-file --file-duration-ms 10000`. The Hoffman ETSIPETscanner2
-files already use a continuous clock. Use `--time-mode absolute` for that
-series. The converter reports overlaps if the selected mode disagrees with
-the input times. PETSIRD events use ascending time blocks and decreasing
+The default `--time-mode auto --file-duration-ms 10000` repairs the IEC's reset
+10-second clocks and retains continuous Hoffman clocks. Explicit `per-file`
+and `absolute` modes remain available. Time-window filtering occurs after repair.
+The default execution mode is GPU when CuPy/CUDA is usable, otherwise CPU readers.
+PETSIRD events use ascending time blocks and decreasing
 detector IDs within each event, with the TOF direction changed on a swap.
 
 `-c` takes the CASToR normalization Cdf, with its matching Cdh alongside
@@ -60,6 +65,6 @@ python $Converter `
 Each output has a `.petsird.json` audit with event totals per file, normalization
 record and SGID counts, and the SDK read-back result. Remove
 `--max-events-per-tree 100000` and choose new filenames for full conversions.
-Use 36 files for either six-minute acquisition and 18 for the three-minute
-Hoffman acquisition. A file count of zero writes a header-only PETSIRD for
+Use 36 files for either six-minute acquisition. For the three-minute Hoffman
+window test use all 36 files with `--end-time-s 180`. A file count of zero writes a header-only PETSIRD for
 geometry and calibration testing.

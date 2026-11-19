@@ -245,6 +245,11 @@ ScannerGeometry ReadScannerGeometry(const std::string& filename)
 
 void usage()
 {
+  std::cout << "GATEROOT 1.0.0, PETSIRD 0.13.3\n"
+            << "  --execution auto|gpu|cpu|none  (auto selects CUDA, then CPU)\n"
+            << "  --workers N --batch-size N --temp-dir PATH\n"
+            << "  --start-time-s S --end-time-s E  [S,E) after clock correction\n"
+            << "  --delayeds auto|required|off   (auto detects delay trees)\n";
   std::cout << "Usage: root_to_petsird [options]" << std::endl;
   std::cout << "Options:" << std::endl;
   std::cout << "  -r, --root-prefix <root_prefix>             Prefix of root files" << std::endl;
@@ -252,7 +257,7 @@ void usage()
   std::cout << "  -c, --normalization-file <filename>         Normalization file" << std::endl;
   std::cout << "  -p, --petsird-file <filename>               PETSiRD file" << std::endl;
   std::cout << "  -n, --number-of-root-files <number>         Number of root files" << std::endl;
-  std::cout << "      --time-mode <absolute|per-file>         absolute (default): the ROOT files share one clock" << std::endl;
+  std::cout << "      --time-mode <absolute|per-file>         auto (default): repair reset clocks; absolute: preserve a shared clock" << std::endl;
   std::cout << "                                              per-file: each ROOT file restarts its clock at 0" << std::endl;
   std::cout << "      --file-duration-ms <ms>                 Duration of each ROOT file with per-file (default 10000)" << std::endl;
   std::cout << "      --selection <categories>                Comma-separated prompt coincidences to keep: true, single-scatter," << std::endl;
@@ -750,10 +755,10 @@ struct GateCoincidences
   Float_t globalPosX1, globalPosY1, globalPosZ1, globalPosX2, globalPosY2, globalPosZ2; // mm
   Double_t time1, time2; // s
 
-  GateCoincidences(const char* tree_name, const std::string& root_prefix, int number_of_root_files)
+  GateCoincidences(const char* tree_name, const std::string& root_prefix, int number_of_root_files, int first_file=1)
     : chain(tree_name)
   {
-    for (int i = 1; i <= number_of_root_files; ++i)
+    for (int i = first_file; i < first_file+number_of_root_files; ++i)
       {
         const auto filename = root_prefix + std::to_string(i) + ".root";
         std::cout << "Input file name is " << filename << " (tree " << tree_name << ")" << std::endl;
@@ -764,7 +769,7 @@ struct GateCoincidences
     chain.SetBranchStatus("*", 0);
     auto set_branch = [&](const char* name, auto* address) {
       chain.SetBranchStatus(name, 1);
-      chain.SetBranchAddress(name, address);
+      if (chain.SetBranchAddress(name, address) < 0) throw std::runtime_error(std::string("Missing ROOT branch: ")+name);
     };
     set_branch("eventID1", &eventID1);
     set_branch("eventID2", &eventID2);
@@ -784,12 +789,6 @@ struct GateCoincidences
     set_branch("layerID2", &layerID2);
     set_branch("energy1", &energy1);
     set_branch("energy2", &energy2);
-    set_branch("globalPosX1", &globalPosX1);
-    set_branch("globalPosY1", &globalPosY1);
-    set_branch("globalPosZ1", &globalPosZ1);
-    set_branch("globalPosX2", &globalPosX2);
-    set_branch("globalPosY2", &globalPosY2);
-    set_branch("globalPosZ2", &globalPosZ2);
     set_branch("time1", &time1);
     set_branch("time2", &time2);
   }
@@ -826,6 +825,8 @@ auto create_new_time_block(const petsird::ScannerInformation& scanner, bool with
   return time_block;
 }
 
+#include "ordered_conversion.h"
+
 int main(int argc, char** argv)
 {
   std::string root_prefix;
@@ -833,7 +834,8 @@ int main(int argc, char** argv)
   std::string normalization_file;
   std::string petsird_file;
   int number_of_root_files = 2;
-  std::string time_mode = "absolute";
+  std::string time_mode = "auto";
+  ConversionOptions options;
   double file_duration_ms = 10000;
   std::string selection = "all";
   std::optional<double> delayed_offset_ps;
@@ -843,7 +845,26 @@ int main(int argc, char** argv)
   // Parse command line args:
   for (int i = 1; i < argc; ++i) {
     std::string arg = argv[i];
-    if (arg == "-r" || arg == "--root-prefix") {
+    if (arg != "-h" && arg != "--help" && arg != "-v" && arg != "--verbose" && arg != "--version" && i+1 >= argc) {
+      std::cerr << "Missing value for " << arg << std::endl; return 1;
+    }
+    if (arg == "--version") {
+      std::cout << "GATEROOT 1.0.0 (PETSIRD >=0.13.3,<0.14)" << std::endl; return 0;
+    } else if (arg == "--execution") {
+      options.execution = argv[++i];
+    } else if (arg == "--workers") {
+      options.workers = std::stoul(argv[++i]);
+    } else if (arg == "--batch-size") {
+      options.batch_size = std::stoul(argv[++i]);
+    } else if (arg == "--temp-dir") {
+      options.temporary = argv[++i];
+    } else if (arg == "--start-time-s") {
+      options.start_ms = std::stod(argv[++i])*1000.;
+    } else if (arg == "--end-time-s") {
+      options.stop_ms = std::stod(argv[++i])*1000.;
+    } else if (arg == "--delayeds") {
+      options.delayeds = argv[++i];
+    } else if (arg == "-r" || arg == "--root-prefix") {
       root_prefix = argv[++i];
     } else if (arg == "-s" || arg == "--scanner-geometry-file") {
       scanner_geometry_file = argv[++i];
@@ -884,12 +905,19 @@ int main(int argc, char** argv)
     return 1;
   }
 
-  if (time_mode != "absolute" && time_mode != "per-file") {
+  if (time_mode != "auto" && time_mode != "absolute" && time_mode != "per-file") {
     std::cerr << "Unknown time mode: " << time_mode << std::endl;
     usage();
     return 1;
   }
   const bool per_file_time = time_mode == "per-file";
+  options.clock = time_mode;
+  options.duration_ms = file_duration_ms;
+  if ((options.execution != "auto" && options.execution != "gpu" && options.execution != "cpu" && options.execution != "none")
+      || (options.delayeds != "auto" && options.delayeds != "required" && options.delayeds != "off")) {
+    std::cerr << "Invalid execution or delayed mode" << std::endl; return 1;
+  }
+  if (delayed_offset_ps && options.delayeds != "off") options.delayeds = "required";
 
   std::array<bool, num_categories> selected;
   try
@@ -950,7 +978,9 @@ int main(int argc, char** argv)
   {
     const double tof_half_range_mm = scannerGeometry.number_of_TOF_bins * scannerGeometry.TOF_bin_width_mm / 2;
     std::cout << "Timing:" << std::endl;
-    if (per_file_time)
+    if (options.clock == "auto")
+      std::cout << "  time mode: auto (repair clock resets; preserve continuous timestamps)" << std::endl;
+    else if (per_file_time)
       std::cout << "  time mode: per-file (each ROOT file restarts its clock at 0 and starts "
                 << file_duration_ms << " ms after the previous one)" << std::endl;
     else
@@ -963,22 +993,12 @@ int main(int argc, char** argv)
     if (delayed_offset_ps)
       std::cout << "  delayed coincidences: tree \"delay\", " << *delayed_offset_ps << " ps added to t1 - t2" << std::endl;
     else
-      std::cout << "  delayed coincidences: not stored" << std::endl;
+      std::cout << "  delayed coincidences: " << options.delayeds << "; zero timing offset" << std::endl;
   }
-
-  // GATE coincidences: the prompts, and the delayed coincidences if asked for
-  GateCoincidences prompts("Coincidences", root_prefix, number_of_root_files);
-  std::unique_ptr<GateCoincidences> delayeds;
-  if (delayed_offset_ps)
-    delayeds = std::make_unique<GateCoincidences>("delay", root_prefix, number_of_root_files);
-
-  printf("Total Number of Coincidence Events in the ROOT file:= %lld \n", prompts.chain.GetEntries());
 
   // Output PETSIRD
   petsird::Header header;
   set_scanner_info(header, scannerGeometry, store_det_efficiencies);
-  if (delayeds)
-    header.scanner.delayed_event_policy = petsird::CoincidencePolicy::kOther;
 
   if (store_det_efficiencies) {
     SetEfficienciesFromFile(header.scanner, scannerGeometry, normalization_file);
@@ -1000,173 +1020,11 @@ int main(int argc, char** argv)
     std::cout << "Event energy bin edges: " << energy_bin_edges.edges << std::endl;
   }
 
-  // Write PETSiRD file
-  petsird::binary::PETSIRDWriter writer(petsird_file);
-  writer.WriteHeader(header);
-
-  const auto event_time_block_duration = scannerGeometry.LM_time_block_duration_ms; // ms
-
-  // Convert the current coincidence of a tree. As in the Python converter, coincidences with an energy outside
-  // the energy window or a TOF outside the TOF bins are not stored (returns false).
-  // offset_ps is added to t1 - t2 (the offset of the delayed coincidence window, 0 for the prompts).
-  auto convert_coincidence = [&](const GateCoincidences& c, double offset_ps, petsird::CoincidenceEvent& event)
-  {
-    const auto energy_index1 = find_bin(1.0e3 * c.energy1, energy_bin_edges); // keV
-    const auto energy_index2 = find_bin(1.0e3 * c.energy2, energy_bin_edges);
-    if (!energy_index1 || !energy_index2)
-      return false;
-
-    petsird::ExpandedDetectionBin expanded_detection_bin;
-    expanded_detection_bin.module_index = calculate_module_index(c.gantryID1, c.rsectorID1, scannerGeometry);
-    expanded_detection_bin.element_index = calculate_element_index(c.moduleID1, c.submoduleID1, c.crystalID1, c.layerID1, scannerGeometry);
-    expanded_detection_bin.energy_index = *energy_index1;
-    event.detection_bins[0] = petsird_helpers::make_detection_bin(scanner, type_of_module, expanded_detection_bin);
-    expanded_detection_bin.module_index = calculate_module_index(c.gantryID2, c.rsectorID2, scannerGeometry);
-    expanded_detection_bin.element_index = calculate_element_index(c.moduleID2, c.submoduleID2, c.crystalID2, c.layerID2, scannerGeometry);
-    expanded_detection_bin.energy_index = *energy_index2;
-    event.detection_bins[1] = petsird_helpers::make_detection_bin(scanner, type_of_module, expanded_detection_bin);
-    if (event.detection_bins[0] == event.detection_bins[1])
-      return false;
-
-    // TOF position (t1 - t2) * c / 2, with t1 the arrival time on detection_bins[0];
-    // ensure correct order (detection_bins[0] > detection_bins[1]), which changes the sign of the TOF
-    double tofPos_mm = (1.0e12 * (c.time1 - c.time2) + offset_ps) * speed_of_light_mm_per_ps / 2;
-    if (event.detection_bins[0] < event.detection_bins[1]) {
-      std::swap(event.detection_bins[0], event.detection_bins[1]);
-      tofPos_mm = -tofPos_mm;
-    }
-    const auto tof_index = find_bin(tofPos_mm, tof_bin_edges);
-    if (!tof_index)
-      return false;
-    event.tof_idx = *tof_index;
-    return true;
-  };
-
-  auto print_event = [&](const GateCoincidences& c, const petsird::CoincidenceEvent& event, Long64_t entry)
-  {
-    std::cout << "Event " << entry << std::endl;
-    const auto expanded_detection_bin0 = petsird_helpers::expand_detection_bin(scanner, type_of_module, event.detection_bins[0]);
-    const auto expanded_detection_bin1 = petsird_helpers::expand_detection_bin(scanner, type_of_module, event.detection_bins[1]);
-    std::cout << "    "
-              << "[ExpandedDetectionBin(module=" << expanded_detection_bin0.module_index << ", "
-              << "el=" << expanded_detection_bin0.element_index << ", "
-              << "energy_index=" << expanded_detection_bin0.energy_index
-              << "), ExpandedDetectionBin(module=" << expanded_detection_bin1.module_index << ", "
-              << "el=" << expanded_detection_bin1.element_index << ", "
-              << "energy_index=" << expanded_detection_bin1.energy_index << ")]\n";
-    std::cout << "  tof_idx: " << event.tof_idx << std::endl;
-    std::cout << "gantryID1=" << c.gantryID1 << ", rsectorID1=" << c.rsectorID1
-              << ", moduleID1=" << c.moduleID1 << ", submoduleID1=" << c.submoduleID1 << ", crystalID1=" << c.crystalID1 << '\n';
-    std::cout << "gantryID2=" << c.gantryID2 << ", rsectorID2=" << c.rsectorID2
-              << ", moduleID2=" << c.moduleID2 << ", submoduleID2=" << c.submoduleID2 << ", crystalID2=" << c.crystalID2 << '\n';
-    const auto mean_pos0 = mean_position(petsird_helpers::geometry::get_detecting_box(scanner, type_of_module, expanded_detection_bin0));
-    const auto mean_pos1 = mean_position(petsird_helpers::geometry::get_detecting_box(scanner, type_of_module, expanded_detection_bin1));
-    std::cout << "  pos 1           : " << mean_pos0.c[0] << ", " << mean_pos0.c[1] << ", " << mean_pos0.c[2] << "\n";
-    std::cout << "  pos 2           : " << mean_pos1.c[0] << ", " << mean_pos1.c[1] << ", " << mean_pos1.c[2] << "\n";
-    std::cout << "  GlobalPosition 1: " << c.globalPosX1 << ", " << c.globalPosY1 << ", " << c.globalPosZ1 << std::endl;
-    std::cout << "  Distance 1: " << std::sqrt(std::pow(mean_pos0.c[0]-c.globalPosX1, 2) + std::pow(mean_pos0.c[1]-c.globalPosY1, 2)
-                                               + std::pow(mean_pos0.c[2]-c.globalPosZ1, 2)) << std::endl;
-    std::cout << "  GlobalPosition 2: " << c.globalPosX2 << ", " << c.globalPosY2 << ", " << c.globalPosZ2 << std::endl;
-    std::cout << "  Distance 2: " << std::sqrt(std::pow(mean_pos1.c[0]-c.globalPosX2, 2) + std::pow(mean_pos1.c[1]-c.globalPosY2, 2)
-                                               + std::pow(mean_pos1.c[2]-c.globalPosZ2, 2)) << std::endl;
-  };
-
-  // A stream of coincidences (prompts or delayed), read in time order
-  struct Stream
-  {
-    GateCoincidences* tree;
-    bool delayed;
-    Long64_t next_entry;
-    long last_time_block;
-  };
-  unsigned long num_read[2] = { 0, 0 }, num_stored[2] = { 0, 0 }, num_outside_windows[2] = { 0, 0 };
-  std::array<unsigned long, num_categories> num_per_category{}; // among the prompts read
-
-  // Read the next coincidence of a stream that is stored, with its time block. Returns false at the end.
-  auto next_coincidence = [&](Stream& s, long& time_block_index, petsird::CoincidenceEvent& event)
-  {
-    auto& c = *s.tree;
-    const Long64_t num_entries = c.chain.GetEntries();
-    while (s.next_entry < num_entries)
-      {
-        const Long64_t entry = s.next_entry++;
-        if (!s.delayed && entry % 1000000 == 0)
-          printf("Processing event %lld of %lld, (%f percent)\n", entry, num_entries, 100.0f*entry/num_entries);
-        c.chain.GetEntry(entry);
-        const int root_file = c.chain.GetTreeNumber() + 1;
-
-        // time in ms since the start of the acquisition
-        double time_ms = c.time1*1.0e3;
-        if (time_ms < 0 || (per_file_time && time_ms >= file_duration_ms))
-          throw std::runtime_error("event at " + std::to_string(time_ms) + " ms in ROOT file " + std::to_string(root_file)
-                                   + (per_file_time ? " is outside 0-" + std::to_string(file_duration_ms) + " ms. Check --file-duration-ms."
-                                                    : " has a negative time."));
-        if (per_file_time)
-          time_ms += (root_file - 1) * file_duration_ms;
-        const long this_time_block = static_cast<long>(time_ms / event_time_block_duration);
-        if (this_time_block < s.last_time_block)
-          throw std::runtime_error("time goes back in ROOT file " + std::to_string(root_file)
-                                   + ". If each ROOT file restarts its clock, use --time-mode per-file.");
-        s.last_time_block = this_time_block;
-
-        ++num_read[s.delayed];
-        if (!s.delayed)
-          {
-            const auto category = c.category();
-            ++num_per_category[category];
-            if (!selected[category])
-              continue;
-          }
-        if (!convert_coincidence(c, s.delayed ? *delayed_offset_ps : 0., event))
-          {
-            ++num_outside_windows[s.delayed];
-            continue;
-          }
-        if (verbose && !s.delayed && entry % 100000 == 0)
-          print_event(c, event, entry);
-        ++num_stored[s.delayed];
-        time_block_index = this_time_block;
-        return true;
-      }
-    return false;
-  };
-
-  // Write the time blocks that have coincidences, with the prompts and delayed coincidences of each block
-  try
-    {
-      Stream prompt_stream{ &prompts, false, 0, -1 };
-      Stream delayed_stream{ delayeds.get(), true, 0, -1 };
-      long prompt_block = 0, delayed_block = 0;
-      petsird::CoincidenceEvent prompt_event, delayed_event;
-      bool has_prompt = next_coincidence(prompt_stream, prompt_block, prompt_event);
-      bool has_delayed = delayeds && next_coincidence(delayed_stream, delayed_block, delayed_event);
-      while (has_prompt || has_delayed)
-        {
-          const long block = !has_delayed ? prompt_block : !has_prompt ? delayed_block : std::min(prompt_block, delayed_block);
-          auto time_block = create_new_time_block(scanner, delayeds != nullptr);
-          time_block.time_interval.start = static_cast<uint32_t>(block * event_time_block_duration);
-          time_block.time_interval.stop = static_cast<uint32_t>((block + 1) * event_time_block_duration);
-          for (; has_prompt && prompt_block == block; has_prompt = next_coincidence(prompt_stream, prompt_block, prompt_event))
-            time_block.prompt_events[type_of_module][type_of_module].push_back(prompt_event);
-          for (; has_delayed && delayed_block == block; has_delayed = next_coincidence(delayed_stream, delayed_block, delayed_event))
-            time_block.delayed_events[type_of_module][type_of_module].push_back(delayed_event);
-          writer.WriteTimeBlocks(time_block);
-        }
-    }
-  catch (const std::runtime_error& e)
-    {
-      std::cerr << "Error: " << e.what() << std::endl;
-      return 1;
-    }
-  writer.EndTimeBlocks();
-  writer.Close();
-
-  printf("Prompt coincidences read: %lu (true %lu, single-scatter %lu, multiple-scatter %lu, random %lu); stored: %lu;"
-         " outside the energy or TOF windows: %lu\n", num_read[0], num_per_category[true_coincidence],
-         num_per_category[single_scatter], num_per_category[multiple_scatter], num_per_category[random_coincidence],
-         num_stored[0], num_outside_windows[0]);
-  if (delayeds)
-    printf("Delayed coincidences read: %lu; stored: %lu; outside the energy or TOF windows: %lu\n",
-           num_read[1], num_stored[1], num_outside_windows[1]);
-  return 0;
+  try {
+    return ordered_conversion(root_prefix,number_of_root_files,petsird_file,scannerGeometry,
+                              std::move(header),selected,delayed_offset_ps.value_or(0.),options);
+  } catch (const std::exception& error) {
+    std::cerr << "Conversion failed: " << error.what() << std::endl;
+    return 1;
+  }
 }

@@ -170,6 +170,7 @@ def normalization(header, geometry, path):
         matrices.append(p.ModulePairEfficiencies(sgid=sgid,values=values))
     header.scanner.detection_efficiencies=p.DetectionEfficiencies(
         calibration_factor=float(fields.get('calibration factor',1.)),
+        detection_bin_efficiencies=[np.ones(geometry.detectors,dtype=np.float32)],
         method_description='Inverse CASToR NCFs averaged by angular sector difference and GATE local detector IDs',
         module_pair_sgidlut=[[[geometry.sgids(np.full(i+1,i),np.arange(i+1)).tolist() for i in range(geometry.modules)]]],
         module_pair_efficiencies_vectors=[[matrices]])
@@ -272,86 +273,21 @@ def verify(path, geometry, report):
 
 
 def convert(args):
-    major,minor,patch=(int(x) for x in version('petsird').split('.')[:3])
-    if (major,minor)!=(0,13) or patch<3:
+    major, minor, patch = (int(x) for x in version('petsird').split('.')[:3])
+    if (major, minor) != (0, 13) or patch < 3:
         raise ValueError('Install PETSIRD >=0.13.3,<0.14 for this converter')
-    geometry=Geometry(args.scanner)
-    if args.time_mode=='per-file' and (args.file_duration_ms<1 or args.file_duration_ms%geometry.block_ms):
-        raise ValueError('File duration must be a positive multiple of the block duration')
-    print(f"Selection: {', '.join(args.selection)}")
-    # print the timing parameters, so that the log of a conversion says which time windows were used
-    tof_half_range=geometry.settings['number_of_TOF_bins']*geometry.settings['TOF_bin_width_mm']/2
-    print('Timing:')
-    print(f'  time mode: per-file (each ROOT file restarts its clock at 0 and starts {args.file_duration_ms} ms after the previous one)'
-          if args.time_mode=='per-file' else '  time mode: absolute (the ROOT files share one clock)')
-    print(f'  time blocks: {geometry.block_ms} ms')
-    print(f"  TOF window: {geometry.settings['number_of_TOF_bins']} bins of {geometry.settings['TOF_bin_width_mm']} mm, "
-          f'from {-tof_half_range:g} to {tof_half_range:g} mm ({-2*tof_half_range/C_MM_PER_PS:g} to {2*tof_half_range/C_MM_PER_PS:g} ps in t1 - t2)')
-    print(f'  delayed coincidences: tree "delay", {args.delayed_offset_ps:g} ps added to t1 - t2'
-          if args.delayed_offset_ps is not None else '  delayed coincidences: not stored',flush=True)
-    files=[Path(f'{args.root_prefix}{i}.root') for i in range(1,args.number_of_root_files+1)]
-    for path in files:
-        if not path.is_file():
-            raise FileNotFoundError(path)
-    output=args.petsird_file
-    partial=output.with_suffix('.partial')
-    report_path=output.with_suffix('.petsird.json')
-    if output.exists() or partial.exists() or report_path.exists():
-        raise FileExistsError(output)
-    header=geometry.header(args.delayed_offset_ps is not None)
-    report={'sdk':version('petsird'),'scanner':header.scanner.model_name,'detectors':geometry.detectors,
-            'time_mode':args.time_mode,'delayed_offset_ps':args.delayed_offset_ps,
-            'normalization_records':0,'sgid_matrices':0,'files':[]}
+    geometry = Geometry(args.scanner)
+    if not np.isfinite(args.file_duration_ms) or args.file_duration_ms <= 0:
+        raise ValueError('File duration must be positive')
+    header = geometry.header(False)
+    report = {'converter_version':'1.0.0', 'sdk':version('petsird'),
+              'scanner':header.scanner.model_name, 'detectors':geometry.detectors,
+              'time_mode':args.time_mode, 'delayed_offset_ps':args.delayed_offset_ps,
+              'normalization_records':0, 'sgid_matrices':0, 'files':[]}
     if args.normalization_file:
-        report.update(normalization(header,geometry,args.normalization_file))
-    output.parent.mkdir(parents=True,exist_ok=True)
-    end=0
-    try:
-        with p.BinaryPETSIRDWriter(str(partial)) as writer:
-            writer.write_header(header)
-            for index,path in enumerate(files):
-                with uproot.open(path) as root:
-                    offset=index*args.file_duration_ms if args.time_mode=='per-file' else 0
-                    opts={'offset_ms':offset,'duration_ms':args.file_duration_ms if args.time_mode=='per-file' else None,
-                          'limit':args.max_events_per_tree}
-                    prompts=root['Coincidences']
-                    delayed=root['delay'] if args.delayed_offset_ps is not None else None
-                    pf=iter(event_blocks(prompts,geometry,categories=args.selection,**opts))
-                    df=iter(event_blocks(delayed,geometry,delayed_offset_ps=args.delayed_offset_ps,**opts)) if delayed is not None else iter(())
-                    a,b=next(pf,None),next(df,None)
-                    p_count=d_count=0
-                    while a is not None or b is not None:
-                        tag=min(row[0] for row in (a,b) if row is not None)
-                        if tag<end or tag+geometry.block_ms>np.iinfo(np.uint32).max:
-                            raise ValueError('ROOT clock overlaps across files or exceeds PETSIRD time range; check --time-mode')
-                        pr,dr=[],[]
-                        if a is not None and a[0]==tag:
-                            pr=a[1]
-                            a=next(pf,None)
-                        if b is not None and b[0]==tag:
-                            dr=b[1]
-                            b=next(df,None)
-                        end=tag+geometry.block_ms
-                        block=p.EventTimeBlock(time_interval=p.TimeInterval(start=tag,stop=end),
-                                              prompt_events=[[pr]],delayed_events=[[dr]] if delayed is not None else [])
-                        writer.write_time_blocks([p.TimeBlock.EventTimeBlock(block)])
-                        p_count+=len(pr)
-                        d_count+=len(dr)
-                    item={'file':str(path),'prompt_entries':min(prompts.num_entries,args.max_events_per_tree or prompts.num_entries),
-                          'delayed_entries':min(delayed.num_entries,args.max_events_per_tree or delayed.num_entries) if delayed is not None else 0,
-                          'prompts':p_count,'delayeds':d_count}
-                    report['files'].append(item)
-                    print(item,flush=True)
-            writer.write_time_blocks([])
-        if args.verify:
-            del header
-            report.update(verify(partial,geometry,report))
-        partial.rename(output)
-    except BaseException:
-        partial.unlink(missing_ok=True)
-        raise
-    report_path.write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
-    print(f'Saved {output} and {report_path}',flush=True)
+        report.update(normalization(header, geometry, args.normalization_file))
+    from parallel_conversion import run
+    run(args, geometry, header, report)
 
 
 def main():
@@ -361,18 +297,32 @@ def main():
     cli.add_argument('--petsird-file',required=True,type=Path)
     cli.add_argument('-s','--scanner',required=True,type=Path)
     cli.add_argument('-c','--normalization-file',type=Path)
-    cli.add_argument('--time-mode',choices=('absolute','per-file'),required=True)
+    cli.add_argument('--time-mode',choices=('auto','absolute','per-file'),default='auto')
     cli.add_argument('--file-duration-ms',type=int,default=10_000)
     cli.add_argument('--delayed-offset-ps',type=float)
     cli.add_argument('--selection',type=selection,default='all',
                      help='comma-separated: true, single-scatter, multiple-scatter, random, scatter, all (default)')
     cli.add_argument('--max-events-per-tree',type=int)
+    cli.add_argument('--execution', choices=('auto','gpu','cpu','none'), default='auto')
+    cli.add_argument('--workers', type=int, default=0, help='ROOT reader workers; 0 selects up to 8 CPU cores')
+    cli.add_argument('--batch-size', type=int, default=500000)
+    cli.add_argument('--temp-dir', type=Path)
+    cli.add_argument('--start-time-s', type=float, default=0.)
+    cli.add_argument('--end-time-s', type=float, default=float('inf'))
+    cli.add_argument('--delayeds', choices=('auto','required','off'), default='auto')
     cli.add_argument('--verify',action='store_true')
+    cli.add_argument('--version', action='version', version='GATEROOT 1.0.0 (PETSIRD >=0.13.3,<0.14)')
     args=cli.parse_args()
     if args.number_of_root_files<0 or (args.max_events_per_tree is not None and args.max_events_per_tree<1):
         cli.error('File count must be nonnegative and event limit positive')
     if args.delayed_offset_ps is not None and not np.isfinite(args.delayed_offset_ps):
         cli.error('Delayed offset must be finite')
+    if args.workers < 0 or args.batch_size < 1:
+        cli.error('workers must be nonnegative and batch-size positive')
+    if not np.isfinite(args.start_time_s) or args.start_time_s < 0 or not args.end_time_s > args.start_time_s:
+        cli.error('Use a finite nonnegative start and a later end time')
+    if args.delayed_offset_ps is not None and args.delayeds != 'off':
+        args.delayeds = 'required'
     convert(args)
 
 
