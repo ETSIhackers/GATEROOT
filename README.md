@@ -91,3 +91,10 @@ Units:
 - energy resolution is a fraction of 511 keV
 - LM_time_block_duration_ms is in ms
 
+### GATE geometry with more than one axial rsector (`n_rsec_z > 1`)
+
+GATE writes `rsectorID` as `axial * n_rsec_xy + angular` (the angular index varies fastest), and the
+converter relies on this. GATE only follows this convention if the axial copies of the rsector are made
+with a `linear` repeater, or with an axial repeater placed before the `ring` repeater.
+Do not use `ring` followed by `cubicArray`: GATE then writes `rsectorID` in a different order, and its own
+coincidence sorter computes wrong sector differences, so the ROOT output itself is not correct.

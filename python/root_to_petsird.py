@@ -21,17 +21,22 @@ class Geometry:
     def __init__(self, path):
         g = json.loads(path.read_text(encoding='utf-8-sig'))
         self.settings = g
-        if (g['n_rsec_z'] != 1 or g['n_cry_layers'] != 1 or g['number_of_energy_bins'] != 1
+        if (g['n_cry_layers'] != 1 or g['number_of_energy_bins'] != 1
                 or any(v for k,v in g.items() if k.endswith('_gap') or 'virtual_crystal' in k)):
-            raise ValueError('Expected one rsector ring, DOI layer and energy bin, with no gaps or virtual crystals')
+            raise ValueError('Expected one DOI layer and energy bin, with no gaps or virtual crystals')
         self.xy = tuple(g[f'n_{k}_xy'] for k in LEVELS)
         self.z = tuple(g[f'n_{k}_z'] for k in LEVELS)
-        self.modules = g['n_rsec_xy']
-        if any(type(i) is not int or i<1 for i in (self.modules,*self.xy,*self.z)):
+        # modules (rsectors) are ordered angle by angle, with the rsector rings along z inside:
+        # module = angular*n_rsec_z + axial, as in the C++ converter
+        self.rsec_xy = g['n_rsec_xy']
+        self.rsec_z = g['n_rsec_z']
+        self.modules = self.rsec_xy*self.rsec_z
+        if any(type(i) is not int or i<1 for i in (self.rsec_xy,self.rsec_z,*self.xy,*self.z)):
             raise ValueError('Invalid hierarchy sizes')
         self.elements = int(np.prod(self.xy)*np.prod(self.z))
         self.detectors = self.modules*self.elements
-        if g['n_det'] != self.modules*np.prod(self.xy) or g['n_rings'] != np.prod(self.z):
+        self.sgid_count = self.rsec_z**2*(self.rsec_xy-1)
+        if g['n_det'] != self.rsec_xy*np.prod(self.xy) or g['n_rings'] != self.rsec_z*np.prod(self.z):
             raise ValueError('Hierarchy and scanner dimensions differ')
         self.energy = np.asarray([g['energy_LLD'],g['energy_ULD']],dtype=np.float32)
         self.tof = ((np.arange(g['number_of_TOF_bins']+1)-g['number_of_TOF_bins']/2)
@@ -62,10 +67,12 @@ class Geometry:
             matrix[2,3]=(z-(nz-1)/2)*dz
             transforms.append(p.RigidTransformation(matrix=matrix))
         copies=[]
-        for angle in np.arange(self.modules)*2*np.pi/self.modules:
+        for angle in np.arange(self.rsec_xy)*2*np.pi/self.rsec_xy:
             c,s=np.cos(angle),np.sin(angle)
-            matrix=np.array([[c,-s,0,radius*c],[s,c,0,radius*s],[0,0,1,0]],dtype=np.float32)
-            copies.append(p.RigidTransformation(matrix=matrix))
+            for axial in range(self.rsec_z):
+                shift=(axial-(self.rsec_z-1)/2)*nz*dz
+                matrix=np.array([[c,-s,0,radius*c],[s,c,0,radius*s],[0,0,1,shift]],dtype=np.float32)
+                copies.append(p.RigidTransformation(matrix=matrix))
         elements=p.ReplicatedBoxSolidVolume(object=box,transforms=transforms)
         module=p.ReplicatedDetectorModule(object=p.DetectorModule(detecting_elements=elements),transforms=copies)
         return p.Header(scanner=p.ScannerInformation(
@@ -81,6 +88,8 @@ class Geometry:
         sizes=[self.modules,*(x*z for x,z in zip(self.xy,self.z)),1]
         if np.any(rows['gantryID'+side]!=0) or any(np.any((v<0)|(v>=n)) for v,n in zip(fields,sizes)):
             raise ValueError('ROOT hierarchy index outside scanner JSON')
+        # GATE writes rsectorID = axial*n_rsec_xy + angular (angular index fastest), see the README
+        fields[0]=fields[0]%self.rsec_xy*self.rsec_z+fields[0]//self.rsec_xy
         ids=np.zeros(len(fields[0]),dtype=np.int64)
         for field,size in zip(fields,sizes):
             ids=ids*size+field
@@ -89,13 +98,20 @@ class Geometry:
     def castor_to_petsird(self):
         """Map CASToR ring-major IDs to the same GATE copy order used by events."""
         ring,position=np.divmod(np.arange(self.detectors),self.settings['n_det'])
+        axial,ring=np.divmod(ring,int(np.prod(self.z)))
         sector,position=np.divmod(position,int(np.prod(self.xy)))
-        ids=sector
+        ids=sector*self.rsec_z+axial
         for ix,iz in zip(range(len(self.xy)),range(len(self.z))):
             x=(position//int(np.prod(self.xy[ix+1:])))%self.xy[ix]
             z=(ring//int(np.prod(self.z[iz+1:])))%self.z[iz]
             ids=ids*(self.xy[ix]*self.z[iz])+z*self.xy[ix]+x
         return ids
+
+    def sgids(self, high, low):
+        """SGIDs of module pairs (high >= low), as in the C++ converter: rotational symmetry only,
+        z_high + n_rsec_z*(z_low + n_rsec_z*(angular difference - 1)), and -1 for modules at the same angle"""
+        (a1,z1),(a2,z2)=np.divmod(high,self.rsec_z),np.divmod(low,self.rsec_z)
+        return np.where(a1==a2,-1,z1+self.rsec_z*(z2+self.rsec_z*(a1-a2-1)))
 
 
 def normalization(header, geometry, path):
@@ -111,7 +127,7 @@ def normalization(header, geometry, path):
         raise ValueError('Expected a complete CASToR normalization Cdf/Cdh (float32 NCF, uint32 ID pair)')
     remap=geometry.castor_to_petsird()
     n=geometry.elements
-    shape=(geometry.modules-1,n,n)
+    shape=(geometry.sgid_count,n,n)
     sums=np.zeros(shape,dtype=np.float64)
     hits=np.zeros(shape,dtype=np.uint32)
     rows=np.memmap(path,dtype=NCF,mode='r',shape=(count,))
@@ -124,9 +140,9 @@ def normalization(header, geometry, path):
             raise ValueError(f'Invalid CASToR normalization record at or after {start}')
         a,b=remap[a],remap[b]
         high,low=np.maximum(a,b),np.minimum(a,b)
-        delta=high//n-low//n
-        keep=delta>0
-        keys=(delta[keep]-1,high[keep]%n,low[keep]%n)
+        sgid=geometry.sgids(high//n,low//n)
+        keep=sgid>=0
+        keys=(sgid[keep],high[keep]%n,low[keep]%n)
         efficiency=np.divide(1.,values,out=np.zeros(len(batch),dtype=np.float64),where=values>0,dtype=np.float64)
         np.add.at(sums,keys,efficiency[keep])
         np.add.at(hits,keys,1)
@@ -141,7 +157,7 @@ def normalization(header, geometry, path):
     header.scanner.detection_efficiencies=p.DetectionEfficiencies(
         calibration_factor=float(fields.get('calibration factor',1.)),
         method_description='Inverse CASToR NCFs averaged by angular sector difference and GATE local detector IDs',
-        module_pair_sgidlut=[[[[i-j-1 for j in range(i+1)] for i in range(geometry.modules)]]],
+        module_pair_sgidlut=[[[geometry.sgids(np.full(i+1,i),np.arange(i+1)).tolist() for i in range(geometry.modules)]]],
         module_pair_efficiencies_vectors=[[matrices]])
     return {'normalization_records':count,'sgid_matrices':len(matrices),
             'populated_sgid_cells':int(np.count_nonzero(hits))}
@@ -211,7 +227,7 @@ def verify(path, geometry, report):
             if len(groups)!=report['sgid_matrices'] or any(group.sgid!=i for i,group in enumerate(groups)):
                 raise ValueError('PETSIRD round-trip SGID mismatch')
             matrices=np.asarray([group.values for group in groups],dtype=np.float32)
-            if (matrices.shape!=(geometry.modules-1,geometry.elements,geometry.elements)
+            if (matrices.shape!=(geometry.sgid_count,geometry.elements,geometry.elements)
                     or not np.isfinite(matrices).all() or np.any(matrices<0)):
                 raise ValueError('Invalid round-trip geometric normalization matrices')
         for block in reader.read_time_blocks():
@@ -230,8 +246,8 @@ def verify(path, geometry, report):
                 counts[i]+=len(events)
                 if i==0 and matrices is not None:
                     n=geometry.elements
-                    delta=a//n-b//n
-                    zero_prompts+=int(np.count_nonzero((delta==0)|(matrices[delta-1,a%n,b%n]==0)))
+                    sgid=geometry.sgids(a//n,b//n)
+                    zero_prompts+=int(np.count_nonzero((sgid<0)|(matrices[np.maximum(sgid,0),a%n,b%n]==0)))
     if counts.tolist()!=[sum(f[k] for f in report['files']) for k in ('prompts','delayeds')]:
         raise ValueError('PETSIRD round-trip event totals differ')
     return {'sdk_roundtrip':'PASS','last_block_end_ms':last,

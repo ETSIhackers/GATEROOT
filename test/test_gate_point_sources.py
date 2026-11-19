@@ -3,6 +3,7 @@
 As the PTSRC protocol asks for 1 source per acquisition, each source (P1 to P4) is in its own ROOT file.
 The backprojection test runs on each of them. The other tests do not depend on the position of the source
 and only use P4, which is away from the centre in x and in z (the TOF check needs a source away from the centre).
+The scanner has 2 rings of rsectors along z, so the tests also check the order of GATE's rsectorID (#42).
 
 1. The C++ converter (cpp/build/root_to_petsird) and the Python converter (python/root_to_petsird.py)
    must write the same PETSIRD content: same events, time blocks and header (geometry within 1e-3 mm).

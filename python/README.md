@@ -4,7 +4,8 @@ This entry point uses the official PETSIRD 0.13 Python SDK (0.13.3 or later)
 and uproot. It accepts the cylinder JSON and numbered ROOT prefixes used by the
 C++ justfile.
 The supported scanner profile is the one used by ETSIPETscanner1 and
-ETSIPETscanner2: one ring of replicated rsectors, one DOI layer, one coincidence
+ETSIPETscanner2, also with more than one ring of rsectors along z (`n_rsec_z`,
+see the main README for the GATE repeaters): one DOI layer, one coincidence
 energy bin, and no gaps or virtual crystals. It does not require CERN ROOT.
 
 ```powershell
