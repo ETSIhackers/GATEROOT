@@ -223,6 +223,8 @@ inline int ordered_conversion(const std::string& prefix,int count,const std::str
   try {
     for (int i=1;i<=count;++i) {
       pending.push_back(std::async(options.execution=="none"?std::launch::deferred:std::launch::async,[&,i] {
+        if (spans[i-1].high+offsets[i-1]<options.start_ms || spans[i-1].low+offsets[i-1]>=options.stop_ms)
+          return FileResult{};
         return spool_root_file(prefix,i,offsets[i-1],spans[i-1].delayed && options.delayeds!="off",
                                delayed_offset_ps,geometry,header.scanner,selected,options,gpu,directory);
       }));
