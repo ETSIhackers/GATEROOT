@@ -1,11 +1,22 @@
-GATEROOT 1.0.0 supports PETSIRD 0.13.3 through the Python and C++ converters.
+# GATEROOT 1.0.0
 
-- `--execution auto|gpu|cpu|none` selects processing. Auto prefers CUDA, then CPU readers. ROOT decoding uses CPUs. CUDA accelerates selection, TOF processing and sorting; Python also maps detector IDs on the GPU.
-- Independent readers use bounded batches and temporary sorted runs. One writer merges timestamps deterministically. Equal timestamps retain file/entry order. Prompt and delayed streams retain their own chronological order in PETSIRD.
-- `--time-mode auto` repairs inter-file clock resets. `per-file` places file i at `(i-1)*file_duration_ms`. `absolute` preserves timestamps and merges overlapping files.
-- `--start-time-s` and `--end-time-s` select a half-open interval after clock repair. The default covers all supplied files.
-- Delay trees are detected automatically. `--delayeds required` requires their presence. `--delayed-offset-ps` recenters the delayed window before TOF encoding. Prompts default to true + single scatter + multiple scatter + randoms.
-- Explicit unit detection-bin efficiencies accompany expanded normalization in both implementations.
-- Tests cover serial/CPU parity, reset-clock windows, stable ordering, delayeds, and optional GPU/cross-language comparisons. CI builds CUDA and CPU variants. GPU runtime tests require hardware and are explicitly skipped on CPU-only runners.
+Official PETSIRD 0.13.3 support for both standalone implementations.
 
-Examples cover IEC 6 minutes, voxBrain 6 minutes, and the first 180 seconds selected from all 36 voxBrain files. The optional EMITRON workflow estimates scatter from a preliminary attenuation-corrected two-iteration image and compiles an additive-only correction sidecar for the final reconstruction.
+- Select automatic GPU/CPU, explicit GPU, CPU reader multithreading or serial execution.
+- Independent CPU ROOT readers, optional CUDA/CuPy transforms and deterministic single-writer output.
+- Bounded sorted spools and external merging preserve corrected chronological order across files and batches.
+- Repair inter-file acquisition clock resets by default; preserve continuous clocks. Explicit absolute/per-file modes remain available.
+- Select a half-open acquisition time window after clock correction; omit it to retain the full acquisition.
+- Include all prompts and available delayed coincidences by default; explicit delayed offset, required/off options and truth selections remain available.
+- Preserve latest multi-axial-rsector geometry mapping and embedded geometric normalization; explicit unit detector efficiencies in both converters.
+- Conversion audit reports include execution mode, workers, clock shifts, per-file event totals and timing.
+- CPU/CUDA build CI, ROOT-derived serial/parallel parity, window/delayed tests, and existing four-point-source localization/TOF tests.
+- Windows Python and WSL C++ examples for IEC 6 min and Hoffman 3/6 min, followed by EMITRON preliminary OSEM, SSS, additive-only sidecar and final OSEM with sensitivity reuse.
+
+GPU acceleration does not move ROOT decompression or official PETSIRD serialization onto the GPU.
+Explicit GPU mode needs working GPU dependencies; automatic mode falls back to CPU.
+Python CUDA runtime parity was tested on RTX 5090; hosted CI compiles C++ CUDA but has no device.
+Run the documented C++ GPU parity test on your workstation before large device conversions.
+The six large SSS/reconstruction examples are provided for local validation and are not CI numerical validation of scatter correction.
+
+See [the execution guide](docs/PARALLEL_CONVERSION.md) and [workstation instructions](docs/WORKSTATION.md).
