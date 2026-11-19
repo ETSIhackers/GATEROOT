@@ -110,7 +110,10 @@ def transform(rows, geometry, categories, offset, start, stop, delayed_ps, xp):
 
 
 def spool_file(job):
-    index, path, geometry, args, offset, has_delays, directory, mode = job
+    index, path, geometry, args, offset, has_delays, directory, mode, span = job
+    if span[1]+offset < args.start_time_s*1000. or span[0]+offset >= args.end_time_s*1000.:
+        return [], {'file':str(path), 'offset_ms':offset, 'prompts':0, 'delayeds':0,
+                    'skipped_time_window':True}
     xp = np
     if mode == 'gpu':
         import cupy as xp
@@ -192,7 +195,7 @@ def run(args, geometry, header, report):
                       clock_offsets_ms=shifts)
         print(f'Execution: {mode}, {workers} ROOT readers; timestamp ordering before PETSIRD serialization', flush=True)
         with TemporaryDirectory(prefix='gateroot-', dir=args.temp_dir) as temporary:
-            jobs = [(i,path,geometry,args,shifts[i],has_delays[i],temporary,mode) for i,path in enumerate(paths)]
+            jobs = [(i,path,geometry,args,shifts[i],has_delays[i],temporary,mode,spans[i]) for i,path in enumerate(paths)]
             futures = [pool.submit(spool_file, job) for job in jobs] if pool else []
             runs = []
             try:
