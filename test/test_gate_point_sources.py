@@ -200,7 +200,9 @@ def test_backprojection_maximum(source, converted, lors, tof):
 
     For TOF, PETSIRD stores (t1 - t2) * c / 2, with t1 the arrival time on detection_bins[0], and
     parallelproj measures the TOF position from the start to the end point of the LOR. With the
-    symmetric PETSIRD TOF bins, bin j has the same centre in both, so tof_idx is used as is.
+    PETSIRD indices are unsigned array offsets; parallelproj uses signed indices. Its reference
+    projector requires an odd bin count, so an even acquisition uses an extra unused bin and
+    an explicit centre offset. The acquisition bin centres themselves are unchanged.
     """
     header, _, tof_idx, _ = converted
     A, B = lors
@@ -209,10 +211,14 @@ def test_backprojection_maximum(source, converted, lors, tof):
                                      (VOXEL_MM,) * 3, img_origin=IMAGE_ORIGIN.astype(np.float32))
     if tof:
         edges = np.asarray(scanner.tof_bin_edges[TYPE_OF_MODULE][TYPE_OF_MODULE].edges)
+        count = len(edges)-1
+        width = float(edges[1]-edges[0])
+        center_offset = float((edges[0]+edges[1])/2+(count//2)*width)
         projector.tof_parameters = TOFParameters(
-            num_tofbins=len(edges) - 1, tofbin_width=float(edges[1] - edges[0]),
+            num_tofbins=count if count % 2 else count+1, tofbin_width=width,
+            tofcenter_offset=center_offset,
             sigma_tof=float(scanner.tof_resolution[TYPE_OF_MODULE][TYPE_OF_MODULE]) / 2.355)
-        projector.event_tofbins = tof_idx.astype(np.int16)
+        projector.event_tofbins = (tof_idx.astype(np.int32)-count//2).astype(np.int16)
         projector.tof = True
     image = np.asarray(projector.adjoint(np.ones(len(A), dtype=np.float32)))
     found = IMAGE_ORIGIN + np.array(np.unravel_index(np.argmax(image), image.shape)) * VOXEL_MM
