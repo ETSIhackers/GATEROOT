@@ -2,19 +2,19 @@ name: GATEROOT
 channels:
   - conda-forge
 dependencies:
-  - bash-completion>=2.11
-  - cmake>=3.21.3
+  - python=3.11
+  - cmake>=3.24
   - cxx-compiler
-  - dvc-azure=2.23.0
   - fmt>=8.1.1
   - gh>=2.38.0
-  - just=1.36.0
-  - ninja>=1.11.0
+  - just>=1.36
+  - ninja>=1.11
   - root_base>=6.28
-  - libpetsird=0.13.3
-  - numpy
-  - parallelproj>=2.0
-  - petsird=0.13.3
+  - libpetsird>=0.13.1,<0.14
+  - numpy>=1.26,<3
+  - uproot>=5.7,<6
   - pytest
-  - shellcheck>=0.8.0
-  - uproot>=5.7
+  - parallelproj
+  - pip
+  - pip:
+      - "petsird @ git+https://github.com/ETSInitiative/PETSIRD.git@v0.13.3#subdirectory=python"
