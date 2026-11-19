@@ -8,12 +8,17 @@ This repository implements a convertor from output of [GATE](https://opengate.re
 
 ## Version information
 
-This compiles with PETSIRD v0.13.1
+Converter **1.0.0**, tested with **PETSIRD 0.13.3**. Both implementations support
+ordered parallel conversion, automatic clock-reset repair, acquisition windows,
+prompts and delayed coincidences, explicit unit detector efficiencies and embedded geometric normalization.
+
+- [Execution modes, timestamp rules and CLI](docs/PARALLEL_CONVERSION.md)
+- [Windows Python / WSL C++ installation and three complete EMITRON examples](docs/WORKSTATION.md)
 
 ## Installation instructions
 1. Get the software
    ```sh
-   git clone --recurse-submodules https://github.com/ETSIhackers/GATEROOT.git
+   git clone --branch v1.0.0 https://github.com/ETSIhackers/GATEROOT.git
    ```
 2. Install dependencies, easiest via conda
    ```sh
@@ -22,13 +27,15 @@ This compiles with PETSIRD v0.13.1
    ```
 3. Build
    ```sh
+   bash examples/install_cpp_sdk.sh
    just build
    ```
 
 ### Updating from a previous version
 
-Note: we no longer use PETSIRD as a submodule. Please use the `libpetsird` conda-forge package
-(which will be installed if you follow the above instructions).
+PETSIRD is not a submodule. The environment supplies native dependencies; the SDK
+installation script generates and builds the pinned PETSIRD 0.13.3 release so an
+older conda package cannot silently determine the binary interface.
 
 - update the code as follows
   ```sh
