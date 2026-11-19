@@ -1,41 +1,64 @@
 name: CI
-
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - '**/*.md'
   pull_request:
     branches: [main]
-
+permissions:
+  contents: read
 defaults:
   run:
-    # See https://github.com/marketplace/actions/setup-miniconda#important
     shell: bash -el {0}
-
 jobs:
   validate:
-    strategy:
-      matrix:
-        cppVersion: [17]
-
-    name: Run tests
+    name: PETSIRD 0.13.3 / CUDA ${{ matrix.cuda }}
     runs-on: ubuntu-latest
-
+    strategy:
+      fail-fast: false
+      matrix:
+        cuda: ["OFF", "ON"]
     steps:
       - uses: actions/checkout@v7
+      - uses: conda-incubator/setup-miniconda@v4
         with:
-          submodules: recursive
-
-      - name: Configure environment
-        uses: ./.github/actions/configure-environment
-
-      - name: Cpp
+          activate-environment: GATEROOT
+          environment-file: environment.yml
+          miniforge-version: latest
+      - uses: actions/checkout@v7
+        with:
+          repository: ETSInitiative/PETSIRD
+          ref: v0.13.3
+          path: .sdk
+      - name: Build and install PETSIRD 0.13.3
         run: |
-          cd cpp && mkdir -p build && cd build
-          cmake -G Ninja -S .. -DCMAKE_PREFIX_PATH="$CONDA_PREFIX" -DCMAKE_INSTALL_PATH="$CONDA_PREFIX"
-          ninja
-
-      - name: Test conversion of GATE point sources
+          cmake -S .sdk/cpp -B .sdk/build -G Ninja -DCMAKE_INSTALL_PREFIX="$CONDA_PREFIX"
+          cmake --build .sdk/build --parallel 2
+          cmake --install .sdk/build
+          python -m pip install --no-deps ./.sdk/python
+      - name: Install CUDA compiler
+        if: matrix.cuda == 'ON'
+        run: conda install -y -c nvidia cuda-nvcc=12.8 cuda-cudart-dev=12.8 cuda-cccl=12.8
+      - name: Build converter
         run: |
-          python -m pytest -v test
+          cmake -S cpp -B cpp/build -G Ninja -DCMAKE_PREFIX_PATH="$CONDA_PREFIX" -DGATEROOT_CUDA=${{ matrix.cuda }} -DCMAKE_CUDA_ARCHITECTURES=90
+          cmake --build cpp/build --parallel 2
+      - name: Test point-source geometry, ordering, time windows and CPU parity
+        run: python -m pytest -v test
+  release:
+    needs: validate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Publish versioned source release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(cat VERSION)"
+          if ! gh release view "v${version}" >/dev/null 2>&1; then
+            gh release create "v${version}" --target "$GITHUB_SHA" --title "GATEROOT ${version}" --notes-file RELEASE_NOTES.md
+          fi
