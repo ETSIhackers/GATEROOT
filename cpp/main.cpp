@@ -978,7 +978,9 @@ int main(int argc, char** argv)
   {
     const double tof_half_range_mm = scannerGeometry.number_of_TOF_bins * scannerGeometry.TOF_bin_width_mm / 2;
     std::cout << "Timing:" << std::endl;
-    if (per_file_time)
+    if (options.clock == "auto")
+      std::cout << "  time mode: auto (repair clock resets; preserve continuous timestamps)" << std::endl;
+    else if (per_file_time)
       std::cout << "  time mode: per-file (each ROOT file restarts its clock at 0 and starts "
                 << file_duration_ms << " ms after the previous one)" << std::endl;
     else
@@ -991,7 +993,7 @@ int main(int argc, char** argv)
     if (delayed_offset_ps)
       std::cout << "  delayed coincidences: tree \"delay\", " << *delayed_offset_ps << " ps added to t1 - t2" << std::endl;
     else
-      std::cout << "  delayed coincidences: not stored" << std::endl;
+      std::cout << "  delayed coincidences: " << options.delayeds << "; zero timing offset" << std::endl;
   }
 
   // Output PETSIRD
