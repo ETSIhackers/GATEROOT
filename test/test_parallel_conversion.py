@@ -100,6 +100,8 @@ def test_python_gpu_parity(tmp_path,input_pair):
     if backend('auto')[0]!='gpu':
         pytest.skip('CUDA GPU and CuPy are required')
     assert convert(tmp_path,input_pair,'gpu')==convert(tmp_path,input_pair,'none')
+    window=['--start-time-s','2','--end-time-s','2.25']
+    assert convert(tmp_path,input_pair,'gpu',window=window)==convert(tmp_path,input_pair,'none',window=window)
 
 
 def test_cpp_cpu_python_parity(tmp_path,input_pair):
@@ -117,3 +119,5 @@ def test_cpp_gpu_python_parity(tmp_path,input_pair):
     if os.environ.get('GATEROOT_TEST_CPP_GPU')!='1':
         pytest.skip('Set GATEROOT_TEST_CPP_GPU=1 on a CUDA-enabled C++ build')
     assert convert(tmp_path,input_pair,'gpu','cpp')==convert(tmp_path,input_pair,'none')
+    window=['--start-time-s','2','--end-time-s','2.25']
+    assert convert(tmp_path,input_pair,'gpu','cpp',window=window)==convert(tmp_path,input_pair,'none',window=window)
