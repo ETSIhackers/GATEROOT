@@ -31,6 +31,9 @@ jobs:
           path: .sdk
       - name: Build and install PETSIRD 0.13.3
         run: |
+          mkdir -p "$RUNNER_TEMP/yardl"
+          curl -fsSL https://github.com/microsoft/yardl/releases/download/v0.6.7/yardl_0.6.7_linux_x86_64.tar.gz | tar -xz -C "$RUNNER_TEMP/yardl"
+          (cd .sdk/model && "$RUNNER_TEMP/yardl/yardl" generate)
           cmake -S .sdk/cpp -B .sdk/build -G Ninja -DCMAKE_INSTALL_PREFIX="$CONDA_PREFIX"
           cmake --build .sdk/build --parallel 2
           cmake --install .sdk/build
@@ -40,7 +43,7 @@ jobs:
         run: conda install -y -c nvidia cuda-nvcc=12.8 cuda-cudart-dev=12.8 cuda-cccl=12.8
       - name: Build converter
         run: |
-          cmake -S cpp -B cpp/build -G Ninja -DCMAKE_PREFIX_PATH="$CONDA_PREFIX" -DGATEROOT_CUDA=${{ matrix.cuda }} -DCMAKE_CUDA_ARCHITECTURES=90
+          cmake -S cpp -B cpp/build -G Ninja -DCMAKE_PREFIX_PATH="$CONDA_PREFIX" -DGATEROOT_CUDA=${{ matrix.cuda }} -DCMAKE_CUDA_ARCHITECTURES=90 -DCMAKE_CUDA_HOST_COMPILER=/usr/bin/g++-13
           cmake --build cpp/build --parallel 2
       - name: Test point-source geometry, ordering, time windows and CPU parity
         run: python -m pytest -v test
