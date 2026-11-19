@@ -168,6 +168,7 @@ inline FileResult spool_root_file(const std::string& prefix, int file_index, dou
 inline int ordered_conversion(const std::string& prefix,int count,const std::string& output,
     const ScannerGeometry& geometry,petsird::Header header,const std::array<bool,num_categories>& selected,
     double delayed_offset_ps,ConversionOptions options) {
+  const auto started=std::chrono::steady_clock::now();
   if (count<0 || options.batch_size==0 || !std::isfinite(options.duration_ms) || options.duration_ms<=0
       || !std::isfinite(options.start_ms) || options.start_ms<0 || !(options.stop_ms>options.start_ms))
     throw std::runtime_error("Invalid file count, batch size, duration or acquisition time window");
@@ -239,6 +240,7 @@ inline int ordered_conversion(const std::string& prefix,int count,const std::str
         pending.clear();
       }
     }
+    report["read_transform_seconds"]=std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();
     petsird::binary::PETSIRDWriter writer(partial.string()); writer.WriteHeader(header);
     SpoolMerge merge(spools); SpoolRecord row;
     bool has=merge.next(row);
@@ -258,6 +260,7 @@ inline int ordered_conversion(const std::string& prefix,int count,const std::str
     }
     writer.EndTimeBlocks(); writer.Close();
     std::filesystem::rename(partial,destination);
+    report["total_seconds"]=std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();
     std::ofstream report_file(manifest); report_file << report.dump(2) << '\n';
   } catch (...) {
     for (auto& future:pending) if (future.valid()) future.wait();
