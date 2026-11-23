@@ -94,6 +94,9 @@ class Geometry:
             bulk_materials=[p.BulkMaterial(id=1,name='GATE scintillator')],
             tof_bin_edges=[[p.BinEdges(edges=self.tof)]],tof_resolution=[[g['TOF_resolution_mm']]],
             event_energy_bin_edges=[p.BinEdges(edges=self.energy)],energy_resolution_at_511=[g['EnergyResolutionAt511']],
+            # the SDK default calibration factor is 0, and petsird.helpers.get_detection_efficiency multiplies
+            # every efficiency by it: use 1, as the C++ converter (petsird_helpers::create)
+            detection_efficiencies=p.DetectionEfficiencies(calibration_factor=1.),
             prompt_event_policy=p.CoincidencePolicy.OTHER,
             delayed_event_policy=p.CoincidencePolicy.OTHER if delayeds else p.CoincidencePolicy.NONE))
 

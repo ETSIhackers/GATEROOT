@@ -6,7 +6,8 @@ and only use P4, which is away from the centre in x and in z (the TOF check need
 The scanner has 2 rings of rsectors along z, so the tests also check the order of GATE's rsectorID (#42).
 
 1. The C++ converter (cpp/build/root_to_petsird) and the Python converter (python/root_to_petsird.py)
-   must write the same PETSIRD content: same events, time blocks and header (geometry within 1e-3 mm),
+   must write the same PETSIRD content: same events, time blocks and header (every field, the geometry
+   within 1e-3 mm),
    with the true coincidences only (--selection true), all the prompts (--selection all) and only the randoms.
 2. PTSRC test of the acquisition protocols in PETSIRDTestData (doc/AcquisitionProtocols.md):
    geometric backprojection of the whole file (all efficiencies 1), without and with TOF, compared with
@@ -146,31 +147,29 @@ def test_python_converter_gives_the_same_output(converted, python_file):
     np.testing.assert_array_equal(bins_py, bins_cpp, "detection bins")
     np.testing.assert_array_equal(tof_py, tof_cpp, "tof_idx")
     np.testing.assert_array_equal(blocks_py, blocks_cpp, "time blocks (start, stop, number of events)")
+    assert_same_header(header_py, header_cpp)
 
-    scanner_cpp, scanner_py = header_cpp.scanner, header_py.scanner
-    assert scanner_py.model_name == scanner_cpp.model_name
-    module_cpp = scanner_cpp.scanner_geometry.replicated_modules[TYPE_OF_MODULE]
-    module_py = scanner_py.scanner_geometry.replicated_modules[TYPE_OF_MODULE]
 
-    def matrices(transforms):
-        return np.array([np.asarray(transform.matrix) for transform in transforms])
+def assert_same_header(python, cpp, path="header"):
+    """Every field of the headers of the Python and C++ converters is the same.
 
-    def corners(module):
-        return np.array([corner.c for corner in module.object.detecting_elements.object.shape.corners])
-
-    np.testing.assert_allclose(matrices(module_py.transforms), matrices(module_cpp.transforms),
-                               atol=1e-3, err_msg="module transforms")
-    np.testing.assert_allclose(matrices(module_py.object.detecting_elements.transforms),
-                               matrices(module_cpp.object.detecting_elements.transforms),
-                               atol=1e-3, err_msg="crystal transforms")
-    np.testing.assert_allclose(corners(module_py), corners(module_cpp), atol=1e-3, err_msg="crystal box")
-    np.testing.assert_allclose(scanner_py.tof_bin_edges[0][0].edges, scanner_cpp.tof_bin_edges[0][0].edges)
-    assert np.isclose(scanner_py.tof_resolution[0][0], scanner_cpp.tof_resolution[0][0])
-    np.testing.assert_allclose(scanner_py.event_energy_bin_edges[0].edges, scanner_cpp.event_energy_bin_edges[0].edges)
-    assert np.isclose(scanner_py.energy_resolution_at_511[0], scanner_cpp.energy_resolution_at_511[0])
-    assert scanner_py.prompt_event_policy == scanner_cpp.prompt_event_policy
-    assert scanner_py.delayed_event_policy == scanner_cpp.delayed_event_policy
-    assert [(m.id, m.name) for m in scanner_py.bulk_materials] == [(m.id, m.name) for m in scanner_cpp.bulk_materials]
+    The geometry is compared within 1e-3 mm: the two converters compute the crystal and module positions
+    with different float operations, which round differently in float32 (by 1 or 2 ULP)."""
+    if type(python).__module__.startswith("petsird") and hasattr(python, "__dict__"):
+        assert type(python) is type(cpp), f"{path}: {type(python).__name__} (Python) != {type(cpp).__name__} (C++)"
+        for name in vars(python):
+            assert_same_header(getattr(python, name), getattr(cpp, name), f"{path}.{name}")
+    elif isinstance(python, (list, tuple)):
+        assert len(python) == len(cpp), f"{path}: {len(python)} elements (Python) != {len(cpp)} (C++)"
+        for i, (a, b) in enumerate(zip(python, cpp)):
+            assert_same_header(a, b, f"{path}[{i}]")
+    elif isinstance(python, np.ndarray):
+        if ".scanner_geometry." in path and np.issubdtype(python.dtype, np.floating):
+            np.testing.assert_allclose(python, cpp, atol=1e-3, err_msg=path)
+        else:
+            np.testing.assert_array_equal(python, cpp, err_msg=path)
+    else:
+        assert python == cpp, f"{path}: {python!r} (Python) != {cpp!r} (C++)"
 
 
 @pytest.mark.parametrize("selection", ["all", "random"])
